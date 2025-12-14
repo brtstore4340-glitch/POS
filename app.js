@@ -375,26 +375,43 @@ function setupLiveToken(runId) {
 
 function renderCart() {
     UI.cartList.innerHTML = '';
+
+    if (state.cartItems.length === 0) {
+        UI.cartList.innerHTML = `
+            <div class="h-full flex flex-col items-center justify-center text-gray-300 gap-4">
+                <svg class="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                <p class="font-medium">No items in cart</p>
+            </div>
+        `;
+        return;
+    }
+
     state.cartItems.forEach((item, index) => {
         const isVoid = item.void;
         const row = document.createElement('div');
-        row.className = `flex items-center px-4 py-2 border-b border-gray-100 hover:bg-gray-50 text-sm ${isVoid ? 'bg-red-50 opacity-50' : ''}`;
+        // Match grid-cols-[50px_1fr_100px_100px_100px_80px]
+        row.className = `grid grid-cols-[50px_1fr_100px_100px_100px_80px] gap-4 px-6 py-3 border-b border-gray-50 items-center hover:bg-gray-50 transition ${isVoid ? 'bg-red-50/50 opacity-60' : ''}`;
 
         row.innerHTML = `
-            <div class="w-10 text-center text-gray-400">${index + 1}</div>
-            <div class="w-24 font-mono text-gray-600">${item.productCode}</div>
-            <div class="flex-1 font-medium text-gray-800 ${isVoid ? 'line-through decoration-red-500' : ''}">${item.desc}</div>
-            <div class="w-16 text-center font-bold">${item.qty}</div>
-            <div class="w-20 text-right text-gray-600">${item.unitPrice?.toFixed(2) || '0.00'}</div>
-            <div class="w-24 text-right font-bold text-gray-800">${item.lineAmount?.toFixed(2) || '0.00'}</div>
-            <div class="w-20 text-right text-red-500 text-xs">${item.discountAmount ? item.discountAmount.toFixed(2) : '-'}</div>
-            <div class="w-12 text-center text-xs font-bold text-blue-600">${item.promoTag || '-'}</div>
-            <div class="w-12 text-center">
-                ${!isVoid ? `<button class="text-red-400 hover:text-red-700 font-bold" onclick="app.voidItem('${item.id}')">X</button>` : ''}
+            <div class="text-center text-gray-400 font-mono text-xs">${index + 1}</div>
+            <div class="flex flex-col justify-center overflow-hidden">
+                <div class="font-medium text-gray-800 truncate ${isVoid ? 'line-through decoration-red-500' : ''}">${item.desc}</div>
+                <div class="text-[10px] text-gray-400 font-mono">${item.productCode} ${item.promoTag ? `<span class="text-blue-600 font-bold ml-1">#${item.promoTag}</span>` : ''}</div>
+            </div>
+            <div class="text-center font-bold text-gray-700 bg-gray-100 rounded py-1">${item.qty}</div>
+            <div class="text-right font-mono text-gray-600">${item.unitPrice?.toFixed(2)}</div>
+            <div class="text-right font-bold text-gray-800 font-mono">${item.lineAmount?.toFixed(2)}</div>
+            <div class="text-center">
+                ${!isVoid ? `
+                    <button class="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition" onclick="app.voidItem('${item.id}')" title="Void Item">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                ` : '<span class="text-xs text-red-500 font-bold uppercase">Void</span>'}
             </div>
         `;
         UI.cartList.appendChild(row);
     });
+    // Auto scroll to bottom
     UI.cartList.scrollTop = UI.cartList.scrollHeight;
 }
 
