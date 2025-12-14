@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import {
-    getFirestore, collection, doc, query, where, onSnapshot, orderBy, writeBatch, setDoc, getDocs, Timestamp
+    getFirestore, collection, doc, query, where, onSnapshot, orderBy, writeBatch, setDoc, getDocs, addDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
@@ -23,10 +23,14 @@ const firebaseConfig = {
 const API_BASE_URL = "https://europe-west1-boots-thailand-pos-project.cloudfunctions.net/api";
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const auth = getAuth(firebaseApp);
 console.log("Firebase Initialized");
+
+// Global App Object for UI Handlers
+window.app = window.app || {};
+window.app.firebase = firebaseApp;
 
 // ==========================================
 // STATE MANAGEMENT & DOM ELEMENTS
@@ -462,27 +466,52 @@ window.app.voidItem = async function (itemId) {
 }
 
 // --- 5. COUPONS ---
+// --- 5. COUPONS ---
 window.app.addCoupon = async function (type) {
-    // Similar to before, but we might need to send to server or just add to array if server validates?
-    // Gemini 3 says "POST /runs/:runId/close ... triggers updateDailySummary".
-    // Does it handle coupons? Usage of coupons affects NetTotal.
-    // Probably I need to syncing coupons to Server.
-    // Let's assume POST /runs/:runId/coupons/add ?
+    if (!state.currentRunId) return Swal.fire("Warning", "Open new bill first", "warning");
 
-    // Implementation:
+    const label = type.charAt(0).toUpperCase() + type.slice(1);
+
     const { value: formValues } = await Swal.fire({
-        title: 'Add Coupon',
-        html: '<input id="swal-code" class="swal2-input" placeholder="Code"><input id="swal-amount" type="number" class="swal2-input" placeholder="Amount">',
-        preConfirm: () => [document.getElementById('swal-code').value, document.getElementById('swal-amount').value]
+        title: `Add ${label} Coupon`,
+        html: `
+            <div class="space-y-3">
+                <input id="swal-code" class="swal2-input w-full" placeholder="Coupon Code" style="margin: 0 auto;">
+                <input id="swal-amount" type="number" step="0.01" class="swal2-input w-full" placeholder="Discount Amount" style="margin: 0 auto;">
+            </div>
+        `,
+        focusConfirm: false,
+        preConfirm: () => {
+            return [
+                document.getElementById('swal-code').value,
+                document.getElementById('swal-amount').value
+            ]
+        }
     });
 
     if (formValues) {
         const [code, amt] = formValues;
-        // API call
-        await apiCall(`/runs/${state.currentRunId}/coupons`, 'POST', {
-            type, code, amount: parseFloat(amt)
-        });
-        Swal.fire("Success", "Coupon Added", "success");
+        if (!amt) return;
+
+        setLoading(true);
+        try {
+            // Save to Firestore: runs/{runId}/coupons
+            await addDoc(collection(db, "runs", state.currentRunId, "coupons"), {
+                type: type, // 'store', 'vendor', 'mobile'
+                code: code || '',
+                amount: parseFloat(amt),
+                createdAt: Timestamp.now()
+            });
+            // Note: Cloud Function 'onCouponAdded' usually recalculates totals. 
+            // Or we rely on local recalcTotals for display until payment.
+
+            Swal.fire("Success", `${label} Coupon Added`, "success");
+        } catch (e) {
+            console.error(e);
+            Swal.fire("Error", "Failed to add coupon: " + e.message, "error");
+        } finally {
+            setLoading(false);
+        }
     }
 };
 
@@ -554,7 +583,7 @@ document.addEventListener('keydown', (e) => {
 
 
 // Export
-window.app = app;
+// window.app is already initialized and populated
 window.app.voidItem = window.app.voidItem; // Ensure accessible
 window.app.addCoupon = window.app.addCoupon;
 // window.app.requestImport is already assigned above
