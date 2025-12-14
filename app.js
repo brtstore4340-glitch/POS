@@ -153,6 +153,10 @@ async function handleImportData(file) {
             return null;
         };
 
+        if (jsonData.length > 0) {
+            console.log("Import Headers found:", Object.keys(jsonData[0]));
+        }
+
         for (const row of jsonData) {
             const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
             const name = findKey(row, 'Item Name', 'ItemName', 'Description', 'Name') || 'Unknown';
@@ -161,7 +165,7 @@ async function handleImportData(file) {
             const barcodeRaw = String(findKey(row, 'Barcodes', 'Barcode', 'EAN') || '');
 
             if (!pCode) {
-                console.warn("Skipping row missing Itemcode:", row);
+                // console.warn("Skipping row missing Itemcode:", row);
                 continue;
             }
 
@@ -196,6 +200,17 @@ async function handleImportData(file) {
             }
         }
         if (count > 0) await batch.commit();
+
+        if (total === 0 && jsonData.length > 0) {
+            const headers = Object.keys(jsonData[0]).join(', ');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Import Mismatch',
+                text: `No items processed. Check your column headers.\nFound: [${headers}]\nExpected: Itemcode, Item Name, Price`
+            });
+            return;
+        }
+
         Swal.fire({
             icon: 'success',
             title: 'Import Completed',
