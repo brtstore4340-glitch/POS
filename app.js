@@ -127,7 +127,15 @@ if (fileImportEl) {
 
 async function handleImportData(file) {
     if (!state.user) return Swal.fire("Error", "Wait for connection...", "error");
-    setLoading(true);
+
+    // Initial Loading State
+    Swal.fire({
+        title: 'Reading File...',
+        text: 'Parsing Excel data',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
     try {
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data);
@@ -156,6 +164,8 @@ async function handleImportData(file) {
         if (jsonData.length > 0) {
             console.log("Import Headers found:", Object.keys(jsonData[0]));
         }
+
+        const totalRows = jsonData.length;
 
         for (const row of jsonData) {
             const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
@@ -193,13 +203,27 @@ async function handleImportData(file) {
 
             count++;
             total++;
+
+            // Update UI every 50 items or on batch commit
             if (count >= batchSize) {
+                Swal.update({
+                    title: 'Importing Data...',
+                    html: `<b>${Math.round((total / totalRows) * 100)}%</b><br>Processed ${total} of ${totalRows} items`
+                });
                 await batch.commit();
                 batch = writeBatch(db);
                 count = 0;
+            } else if (total % 50 === 0) {
+                Swal.update({
+                    text: `Processed ${total} / ${totalRows} items`
+                });
             }
         }
-        if (count > 0) await batch.commit();
+
+        if (count > 0) {
+            Swal.update({ text: 'Finalizing...' });
+            await batch.commit();
+        }
 
         if (total === 0 && jsonData.length > 0) {
             const headers = Object.keys(jsonData[0]).join(', ');
@@ -221,7 +245,7 @@ async function handleImportData(file) {
         console.error(e);
         Swal.fire("Error", "Import failed: " + e.message, "error");
     } finally {
-        setLoading(false);
+        // setLoading(false); // Managed manually by Swal calls above
         if (fileImportEl) fileImportEl.value = '';
     }
 }
