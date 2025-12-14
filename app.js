@@ -196,7 +196,11 @@ async function handleImportData(file) {
             }
         }
         if (count > 0) await batch.commit();
-        Swal.fire("Success", `Imported ${total} items successfully.`, "success");
+        Swal.fire({
+            icon: 'success',
+            title: 'Import Completed',
+            text: `Successfully processed ${total} items.`
+        });
     } catch (e) {
         console.error(e);
         Swal.fire("Error", "Import failed: " + e.message, "error");
