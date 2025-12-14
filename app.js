@@ -142,6 +142,16 @@ async function handleImportData(file) {
         return; // Cancelled
     }
 
+    // Ask if we should clear existing data
+    const { isConfirmed: clearConfirmed } = await Swal.fire({
+        title: 'Clear Existing Data?',
+        text: 'This will delete ALL products and barcodes before importing the new file.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, clear',
+        cancelButtonText: 'No, keep'
+    });
+
     // Initial Loading
     Swal.fire({
         title: 'Reading File...',
@@ -157,182 +167,222 @@ async function handleImportData(file) {
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
         if (jsonData.length === 0) {
-            return Swal.fire("Error", "Excel file appears empty", "warning");
-        }
-
-        const totalRows = jsonData.length;
-        const BATCH_SIZE = 500; // Firestore limit per batch
-        const CONCURRENCY_LIMIT = 5; // Parallel requests
-
-        // Helper: Flexible Column Mapping
-        const findKey = (row, ...candidates) => {
-            const keys = Object.keys(row);
-            for (const c of candidates) {
-                const match = keys.find(k => k.toLowerCase().trim() === c.toLowerCase().trim());
-                if (match) return row[match];
+            if (jsonData.length === 0) {
+                return Swal.fire("Error", "Excel file appears empty", "warning");
             }
-            return null;
-        };
 
-        if (jsonData.length > 0) {
-            console.log("Import Headers found:", Object.keys(jsonData[0]));
-        }
+            // -------------------------------------------------
+            // Optional: clear existing data before importing new master file
+            // -------------------------------------------------
+            if (clearConfirmed) {
+                Swal.update({ title: 'Clearing Collections', html: 'Removing old products & barcodes...' });
+                const DELETE_BATCH_SIZE = 500;
+                const DELETE_CONCURRENCY = 5;
+                const deleteCollection = async (colPath) => {
+                    const colRef = collection(db, colPath);
+                    const snapshot = await getDocs(colRef);
+                    let batch = writeBatch(db);
+                    let count = 0;
+                    const batchPromises = [];
+                    snapshot.forEach(docSnap => {
+                        batch.delete(docSnap.ref);
+                        count++;
+                        if (count === DELETE_BATCH_SIZE) {
+                            batchPromises.push(batch.commit());
+                            batch = writeBatch(db);
+                            count = 0;
+                        }
+                    });
+                    if (count > 0) batchPromises.push(batch.commit());
+                    // run with concurrency limit
+                    const exec = async (tasks) => {
+                        const executing = new Set();
+                        for (const p of tasks) {
+                            const task = p.then(() => executing.delete(task));
+                            executing.add(task);
+                            if (executing.size >= DELETE_CONCURRENCY) await Promise.race(executing);
+                        }
+                        await Promise.all(executing);
+                    };
+                    await exec(batchPromises);
+                };
+                await deleteCollection('products');
+                await deleteCollection('barcodes');
+            }
 
-        // Prepare all operations in memory first (fast)
-        let operations = [];
-        let validCount = 0;
+            const totalRows = jsonData.length;
+            const BATCH_SIZE = 500; // Firestore limit per batch
+            const CONCURRENCY_LIMIT = 5; // Parallel requests
 
-        for (const row of jsonData) {
-            const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
-            if (!pCode) continue;
-
-            const name = findKey(row, 'Item Name', 'ItemName', 'Description', 'Name') || 'Unknown';
-            const price = parseFloat(findKey(row, 'Price', 'Retail Price', 'Unit Price') || 0);
-            const promo = findKey(row, 'Promotion', 'Promo', 'Tag') || null;
-            const barcodeRaw = String(findKey(row, 'Barcodes', 'Barcode', 'EAN') || '');
-
-            operations.push({
-                type: 'product',
-                ref: doc(db, "products", pCode),
-                data: {
-                    productCode: pCode,
-                    desc: name,
-                    unitPrice: price,
-                    promoTag: promo,
-                    updatedAt: Timestamp.now(),
-                    importVersion: versionNote
+            // Helper: Flexible Column Mapping
+            const findKey = (row, ...candidates) => {
+                const keys = Object.keys(row);
+                for (const c of candidates) {
+                    const match = keys.find(k => k.toLowerCase().trim() === c.toLowerCase().trim());
+                    if (match) return row[match];
                 }
-            });
+                return null;
+            };
 
-            const barcodes = barcodeRaw.split(',').map(b => b.trim()).filter(b => b);
-            for (const code of barcodes) {
+            if (jsonData.length > 0) {
+                console.log("Import Headers found:", Object.keys(jsonData[0]));
+            }
+
+            // Prepare all operations in memory first (fast)
+            let operations = [];
+            let validCount = 0;
+
+            for (const row of jsonData) {
+                const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
+                if (!pCode) continue;
+
+                const name = findKey(row, 'Item Name', 'ItemName', 'Description', 'Name') || 'Unknown';
+                const price = parseFloat(findKey(row, 'Price', 'Retail Price', 'Unit Price') || 0);
+                const promo = findKey(row, 'Promotion', 'Promo', 'Tag') || null;
+                const barcodeRaw = String(findKey(row, 'Barcodes', 'Barcode', 'EAN') || '');
+
                 operations.push({
-                    type: 'barcode',
-                    ref: doc(db, "barcodes", code),
+                    type: 'product',
+                    ref: doc(db, "products", pCode),
                     data: {
-                        barcode: code,
                         productCode: pCode,
+                        desc: name,
+                        unitPrice: price,
+                        promoTag: promo,
+                        updatedAt: Timestamp.now(),
                         importVersion: versionNote
                     }
                 });
+
+                const barcodes = barcodeRaw.split(',').map(b => b.trim()).filter(b => b);
+                for (const code of barcodes) {
+                    operations.push({
+                        type: 'barcode',
+                        ref: doc(db, "barcodes", code),
+                        data: {
+                            barcode: code,
+                            productCode: pCode,
+                            importVersion: versionNote
+                        }
+                    });
+                }
+                validCount++;
             }
-            validCount++;
-        }
 
-        if (validCount === 0) {
-            const headers = Object.keys(jsonData[0]).join(', ');
-            return Swal.fire({
-                icon: 'warning',
-                title: 'Import Mismatch',
-                text: `No valid items found. Check headers.\nFound: [${headers}]`
-            });
-        }
-
-        // Chunk operations into batches
-        const batches = [];
-        let currentBatch = writeBatch(db);
-        let batchOpCount = 0;
-
-        for (const op of operations) {
-            currentBatch.set(op.ref, op.data, { merge: true });
-            batchOpCount++;
-            if (batchOpCount >= BATCH_SIZE) {
-                batches.push(currentBatch);
-                currentBatch = writeBatch(db);
-                batchOpCount = 0;
-            }
-        }
-        if (batchOpCount > 0) batches.push(currentBatch);
-
-        // Execute batches with concurrency limit
-        let processedBatches = 0;
-        const totalBatches = batches.length;
-
-        Swal.update({
-            title: 'Uploading...',
-            html: `Prepared ${validCount} items into ${totalBatches} batches.<br>Starting parallel upload...`
-        });
-
-        // Simple concurrency queue
-        const results = [];
-        const executing = new Set();
-
-        for (const batch of batches) {
-            const p = batch.commit().then(() => {
-                executing.delete(p);
-                processedBatches++;
-                Swal.update({
-                    html: `<b>${Math.round((processedBatches / totalBatches) * 100)}%</b><br>Uploading batch ${processedBatches} of ${totalBatches}`
+            if (validCount === 0) {
+                const headers = Object.keys(jsonData[0]).join(', ');
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'Import Mismatch',
+                    text: `No valid items found. Check headers.\nFound: [${headers}]`
                 });
-            });
-            results.push(p);
-            executing.add(p);
-
-            if (executing.size >= CONCURRENCY_LIMIT) {
-                await Promise.race(executing);
             }
-        }
-        await Promise.all(results);
 
-        // Record History
-        try {
-            await addDoc(collection(db, "system_imports"), {
-                version: versionNote,
-                timestamp: Timestamp.now(),
-                itemsCount: validCount,
-                totalRows: totalRows,
-                batches: totalBatches,
-                user: state.user.uid
+            // Chunk operations into batches
+            const batches = [];
+            let currentBatch = writeBatch(db);
+            let batchOpCount = 0;
+
+            for (const op of operations) {
+                currentBatch.set(op.ref, op.data, { merge: true });
+                batchOpCount++;
+                if (batchOpCount >= BATCH_SIZE) {
+                    batches.push(currentBatch);
+                    currentBatch = writeBatch(db);
+                    batchOpCount = 0;
+                }
+            }
+            if (batchOpCount > 0) batches.push(currentBatch);
+
+            // Execute batches with concurrency limit
+            let processedBatches = 0;
+            const totalBatches = batches.length;
+
+            Swal.update({
+                title: 'Uploading...',
+                html: `Prepared ${validCount} items into ${totalBatches} batches.<br>Starting parallel upload...`
             });
-        } catch (e) { console.warn("Could not save import log", e); }
 
-        Swal.fire({
-            icon: 'success',
-            title: 'Import Completed',
-            text: `Successfully processed ${validCount} items (v: ${versionNote})`
-        });
-        updateTotalCount();
-    } catch (e) {
-        console.error(e);
-        Swal.fire("Error", "Import failed: " + e.message, "error");
-    } finally {
-        if (fileImportEl) fileImportEl.value = '';
+            // Simple concurrency queue
+            const results = [];
+            const executing = new Set();
+
+            for (const batch of batches) {
+                const p = batch.commit().then(() => {
+                    executing.delete(p);
+                    processedBatches++;
+                    Swal.update({
+                        html: `<b>${Math.round((processedBatches / totalBatches) * 100)}%</b><br>Uploading batch ${processedBatches} of ${totalBatches}`
+                    });
+                });
+                results.push(p);
+                executing.add(p);
+
+                if (executing.size >= CONCURRENCY_LIMIT) {
+                    await Promise.race(executing);
+                }
+            }
+            await Promise.all(results);
+
+            // Record History
+            try {
+                await addDoc(collection(db, "system_imports"), {
+                    version: versionNote,
+                    timestamp: Timestamp.now(),
+                    itemsCount: validCount,
+                    totalRows: totalRows,
+                    batches: totalBatches,
+                    user: state.user.uid
+                });
+            } catch (e) { console.warn("Could not save import log", e); }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Import Completed',
+                text: `Successfully processed ${validCount} items (v: ${versionNote})`
+            });
+            updateTotalCount();
+        } catch (e) {
+            console.error(e);
+            Swal.fire("Error", "Import failed: " + e.message, "error");
+        } finally {
+            if (fileImportEl) fileImportEl.value = '';
+        }
     }
-}
 
 // ==========================================
 // DAILY SUMMARY
 // ==========================================
 const btnDailySummary = getElement('btnDailySummary');
-if (btnDailySummary) {
-    btnDailySummary.addEventListener('click', async () => {
-        if (!state.user) return;
-        setLoading(true);
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const startTimestamp = Timestamp.fromDate(today);
+    if (btnDailySummary) {
+        btnDailySummary.addEventListener('click', async () => {
+            if (!state.user) return;
+            setLoading(true);
+            try {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const startTimestamp = Timestamp.fromDate(today);
 
-            const q = query(
-                collection(db, "runs"),
-                where("createdAt", ">=", startTimestamp)
-            );
+                const q = query(
+                    collection(db, "runs"),
+                    where("createdAt", ">=", startTimestamp)
+                );
 
-            const snapshot = await getDocs(q);
-            let totalSales = 0;
-            let count = 0;
+                const snapshot = await getDocs(q);
+                let totalSales = 0;
+                let count = 0;
 
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.status === 'closed') {
-                    totalSales += (data.netTotal || 0);
-                    count++;
-                }
-            });
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.status === 'closed') {
+                        totalSales += (data.netTotal || 0);
+                        count++;
+                    }
+                });
 
-            Swal.fire({
-                title: 'Daily Summary',
-                html: `
+                Swal.fire({
+                    title: 'Daily Summary',
+                    html: `
                     <div class="text-left">
                         <p><strong>Date:</strong> ${today.toLocaleDateString('th-TH')}</p>
                         <p><strong>Bills:</strong> ${count}</p>
@@ -340,212 +390,212 @@ if (btnDailySummary) {
                         <p class="text-xl"><strong>Total:</strong> <span class="text-green-600">${totalSales.toLocaleString()} THB</span></p>
                     </div>
                 `,
-                icon: 'info'
-            });
-        } catch (e) {
-            console.error(e);
-            Swal.fire("Error", "Could not load summary. " + e.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    });
-}
-
-// ==========================================
-// API CLIENT
-// ==========================================
-async function apiCall(endpoint, method, body = {}) {
-    if (API_BASE_URL.includes("YOUR_CLOUD_FUNCTIONS")) {
-        throw new Error("Please configure API_BASE_URL in app.js");
-    }
-    const token = state.user ? await state.user.getIdToken() : null;
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: method,
-        headers: headers,
-        body: method !== 'GET' ? JSON.stringify(body) : undefined
-    });
-
-    if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || `API Error: ${response.statusText}`);
-    }
-    return response.json();
-}
-
-// ==========================================
-// CORE LOGIC (API DRIVEN)
-// ==========================================
-
-// --- 1. NEW BILL ---
-const btnNewBill = getElement('btnNewBill');
-if (btnNewBill) {
-    btnNewBill.addEventListener('click', async () => {
-        if (!state.user) return;
-        setLoading(true);
-        try {
-            // BACKEND bypass: Use Direct Firestore due to CORS on localhost
-            // const res = await apiCall('/runs/open', 'POST');
-
-            const runRef = await addDoc(collection(db, "runs"), {
-                createdAt: Timestamp.now(),
-                status: 'open',
-                cashierId: state.user.uid,
-                subtotal: 0,
-                discount: 0,
-                netTotal: 0,
-                coupons: []
-            });
-
-            state.currentRunId = runRef.id;
-            state.coupons = [];
-
-            const runIdDisplay = getElement('runIdDisplay');
-            if (runIdDisplay) runIdDisplay.innerText = `Run ID: ${runRef.id.slice(0, 8).toUpperCase()}`;
-
-            setupLiveToken(state.currentRunId);
-            enableControls(true);
-
-            // Explicit focus
-            const barcodeInput = getElement('inputBarcode');
-            if (barcodeInput) barcodeInput.focus();
-
-        } catch (e) {
-            console.error(e);
-            Swal.fire("Error", e.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    });
-}
-
-// --- 2. SCAN / ADD ITEM ---
-async function handleScan(code, qty) {
-    if (!state.currentRunId) {
-        Swal.fire("Warning", "Open new bill first", "warning");
-        return;
-    }
-    setLoading(true);
-    try {
-        // BACKEND bypass: Use Direct Firestore Logic
-
-        // 1. Resolve Product
-        let product = null;
-        let productCode = code;
-
-        // Try direct fetch from products collection
-        const productRef = doc(db, "products", code);
-        const productSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", code)));
-
-        if (!productSnap.empty) {
-            product = productSnap.docs[0].data();
-            productCode = product.productCode;
-        } else {
-            // Try lookup via barcodes collection
-            const barcodeRef = doc(db, "barcodes", code);
-            const barcodeSnap = await getDocs(query(collection(db, "barcodes"), where("barcode", "==", code)));
-            if (!barcodeSnap.empty) {
-                const bData = barcodeSnap.docs[0].data();
-                productCode = bData.productCode;
-                // Fetch actual product
-                const pSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", productCode)));
-                if (!pSnap.empty) product = pSnap.docs[0].data();
+                    icon: 'info'
+                });
+            } catch (e) {
+                console.error(e);
+                Swal.fire("Error", "Could not load summary. " + e.message, "error");
+            } finally {
+                setLoading(false);
             }
-        }
+        });
+    }
 
-        if (!product) {
-            throw new Error(`Product not found: ${code}`);
+    // ==========================================
+    // API CLIENT
+    // ==========================================
+    async function apiCall(endpoint, method, body = {}) {
+        if (API_BASE_URL.includes("YOUR_CLOUD_FUNCTIONS")) {
+            throw new Error("Please configure API_BASE_URL in app.js");
         }
+        const token = state.user ? await state.user.getIdToken() : null;
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        // 2. Add Item to Sub-collection
-        const lineTotal = (product.unitPrice || 0) * qty;
-        await addDoc(collection(db, "runs", state.currentRunId, "items"), {
-            productCode: productCode,
-            desc: product.desc || 'Unknown',
-            qty: qty,
-            unitPrice: product.unitPrice || 0,
-            lineAmount: lineTotal,
-            discountAmount: 0,
-            promoTag: product.promoTag || null,
-            createdAt: Timestamp.now(),
-            void: false
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: method,
+            headers: headers,
+            body: method !== 'GET' ? JSON.stringify(body) : undefined
         });
 
-        // UI Reset
-        const inputQty = getElement('inputQty');
-        const inputBarcode = getElement('inputBarcode');
-        if (inputQty) inputQty.value = 1;
-        if (inputBarcode) {
-            inputBarcode.value = '';
-            inputBarcode.focus();
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || `API Error: ${response.statusText}`);
         }
-
-    } catch (e) {
-        if (e.message.includes("not found")) {
-            const { value: manualCode } = await Swal.fire({
-                title: 'Item not found',
-                text: 'Please enter Product Code manually',
-                input: 'text'
-            });
-            if (manualCode) handleScan(manualCode, qty);
-        } else {
-            console.error(e);
-            Swal.fire("Error", e.message, "error");
-        }
-    } finally {
-        setLoading(false);
+        return response.json();
     }
-}
 
-// --- 3. LIVE CART (Firestore Listener) ---
-function setupLiveToken(runId) {
-    if (!runId) return; // Detach logic if null?
+    // ==========================================
+    // CORE LOGIC (API DRIVEN)
+    // ==========================================
 
-    // Listen to Items
-    const itemsRef = collection(db, "runs", runId, "items");
-    const q = query(itemsRef, orderBy("createdAt", "asc"));
+    // --- 1. NEW BILL ---
+    const btnNewBill = getElement('btnNewBill');
+    if (btnNewBill) {
+        btnNewBill.addEventListener('click', async () => {
+            if (!state.user) return;
+            setLoading(true);
+            try {
+                // BACKEND bypass: Use Direct Firestore due to CORS on localhost
+                // const res = await apiCall('/runs/open', 'POST');
 
-    onSnapshot(q, (snapshot) => {
-        state.cartItems = [];
-        snapshot.forEach(d => state.cartItems.push({ id: d.id, ...d.data() }));
-        renderCart();
-        recalcTotals();
-    });
+                const runRef = await addDoc(collection(db, "runs"), {
+                    createdAt: Timestamp.now(),
+                    status: 'open',
+                    cashierId: state.user.uid,
+                    subtotal: 0,
+                    discount: 0,
+                    netTotal: 0,
+                    coupons: []
+                });
 
-    // Listen to Run Header
-    onSnapshot(doc(db, "runs", runId), (snap) => {
-        if (snap.exists()) {
-            const data = snap.data();
-            state.coupons = data.coupons || [];
-            // Re-calc with updated coupons
-            recalcTotals();
+                state.currentRunId = runRef.id;
+                state.coupons = [];
+
+                const runIdDisplay = getElement('runIdDisplay');
+                if (runIdDisplay) runIdDisplay.innerText = `Run ID: ${runRef.id.slice(0, 8).toUpperCase()}`;
+
+                setupLiveToken(state.currentRunId);
+                enableControls(true);
+
+                // Explicit focus
+                const barcodeInput = getElement('inputBarcode');
+                if (barcodeInput) barcodeInput.focus();
+
+            } catch (e) {
+                console.error(e);
+                Swal.fire("Error", e.message, "error");
+            } finally {
+                setLoading(false);
+            }
+        });
+    }
+
+    // --- 2. SCAN / ADD ITEM ---
+    async function handleScan(code, qty) {
+        if (!state.currentRunId) {
+            Swal.fire("Warning", "Open new bill first", "warning");
+            return;
         }
-    });
-}
+        setLoading(true);
+        try {
+            // BACKEND bypass: Use Direct Firestore Logic
 
-function renderCart() {
-    const list = getElement('cartItemsList');
-    if (!list) return;
+            // 1. Resolve Product
+            let product = null;
+            let productCode = code;
 
-    list.innerHTML = '';
+            // Try direct fetch from products collection
+            const productRef = doc(db, "products", code);
+            const productSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", code)));
 
-    if (state.cartItems.length === 0) {
-        list.innerHTML = `
+            if (!productSnap.empty) {
+                product = productSnap.docs[0].data();
+                productCode = product.productCode;
+            } else {
+                // Try lookup via barcodes collection
+                const barcodeRef = doc(db, "barcodes", code);
+                const barcodeSnap = await getDocs(query(collection(db, "barcodes"), where("barcode", "==", code)));
+                if (!barcodeSnap.empty) {
+                    const bData = barcodeSnap.docs[0].data();
+                    productCode = bData.productCode;
+                    // Fetch actual product
+                    const pSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", productCode)));
+                    if (!pSnap.empty) product = pSnap.docs[0].data();
+                }
+            }
+
+            if (!product) {
+                throw new Error(`Product not found: ${code}`);
+            }
+
+            // 2. Add Item to Sub-collection
+            const lineTotal = (product.unitPrice || 0) * qty;
+            await addDoc(collection(db, "runs", state.currentRunId, "items"), {
+                productCode: productCode,
+                desc: product.desc || 'Unknown',
+                qty: qty,
+                unitPrice: product.unitPrice || 0,
+                lineAmount: lineTotal,
+                discountAmount: 0,
+                promoTag: product.promoTag || null,
+                createdAt: Timestamp.now(),
+                void: false
+            });
+
+            // UI Reset
+            const inputQty = getElement('inputQty');
+            const inputBarcode = getElement('inputBarcode');
+            if (inputQty) inputQty.value = 1;
+            if (inputBarcode) {
+                inputBarcode.value = '';
+                inputBarcode.focus();
+            }
+
+        } catch (e) {
+            if (e.message.includes("not found")) {
+                const { value: manualCode } = await Swal.fire({
+                    title: 'Item not found',
+                    text: 'Please enter Product Code manually',
+                    input: 'text'
+                });
+                if (manualCode) handleScan(manualCode, qty);
+            } else {
+                console.error(e);
+                Swal.fire("Error", e.message, "error");
+            }
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // --- 3. LIVE CART (Firestore Listener) ---
+    function setupLiveToken(runId) {
+        if (!runId) return; // Detach logic if null?
+
+        // Listen to Items
+        const itemsRef = collection(db, "runs", runId, "items");
+        const q = query(itemsRef, orderBy("createdAt", "asc"));
+
+        onSnapshot(q, (snapshot) => {
+            state.cartItems = [];
+            snapshot.forEach(d => state.cartItems.push({ id: d.id, ...d.data() }));
+            renderCart();
+            recalcTotals();
+        });
+
+        // Listen to Run Header
+        onSnapshot(doc(db, "runs", runId), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                state.coupons = data.coupons || [];
+                // Re-calc with updated coupons
+                recalcTotals();
+            }
+        });
+    }
+
+    function renderCart() {
+        const list = getElement('cartItemsList');
+        if (!list) return;
+
+        list.innerHTML = '';
+
+        if (state.cartItems.length === 0) {
+            list.innerHTML = `
             <div class="h-full flex flex-col items-center justify-center text-gray-300 gap-4">
                 <svg class="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
                 <p class="font-medium">No items in cart</p>
             </div>
         `;
-        return;
-    }
+            return;
+        }
 
-    state.cartItems.forEach((item, index) => {
-        const isVoid = item.void;
-        const row = document.createElement('div');
-        row.className = `grid grid-cols-[50px_1fr_100px_100px_100px_80px] gap-4 px-6 py-3 border-b border-gray-50 items-center hover:bg-gray-50 transition ${isVoid ? 'bg-red-50/50 opacity-60' : ''}`;
-        row.innerHTML = `
+        state.cartItems.forEach((item, index) => {
+            const isVoid = item.void;
+            const row = document.createElement('div');
+            row.className = `grid grid-cols-[50px_1fr_100px_100px_100px_80px] gap-4 px-6 py-3 border-b border-gray-50 items-center hover:bg-gray-50 transition ${isVoid ? 'bg-red-50/50 opacity-60' : ''}`;
+            row.innerHTML = `
             <div class="text-center text-gray-400 font-mono text-xs">${index + 1}</div>
             <div class="flex flex-col justify-center overflow-hidden">
                 <div class="font-medium text-gray-800 truncate ${isVoid ? 'line-through decoration-red-500' : ''}">${item.desc}</div>
@@ -562,261 +612,261 @@ function renderCart() {
                 ` : '<span class="text-xs text-red-500 font-bold uppercase">Void</span>'}
             </div>
         `;
-        list.appendChild(row);
-    });
-    list.scrollTop = list.scrollHeight;
-}
-
-function recalcTotals() {
-    let subtotal = 0;
-    let lineDiscounts = 0;
-    state.cartItems.forEach(item => {
-        if (!item.void) {
-            subtotal += (item.lineAmount || 0);
-            lineDiscounts += (item.discountAmount || 0);
-        }
-    });
-    let couponDiscounts = 0;
-    state.coupons.forEach(c => couponDiscounts -= (c.amount || 0));
-
-    const net = subtotal + lineDiscounts + couponDiscounts;
-
-    const elSub = getElement('summarySubtotal');
-    const elDisc = getElement('summaryDiscount');
-    const elNet = getElement('summaryNetTotal');
-
-    if (elSub) elSub.textContent = subtotal.toFixed(2);
-    if (elDisc) elDisc.textContent = (lineDiscounts + couponDiscounts).toFixed(2);
-    if (elNet) elNet.textContent = net.toFixed(2);
-
-    state.calculatedNetTotal = net;
-}
-
-// --- 4. VOID ---
-window.app.voidItem = async function (itemId) {
-    if (!confirm("Confirm Void?")) return;
-    setLoading(true);
-    try {
-        // BACKEND bypass: Direct Update
-        // await apiCall(`/runs/${state.currentRunId}/items/${itemId}/void`, 'POST');
-        const itemRef = doc(db, "runs", state.currentRunId, "items", itemId);
-        await setDoc(itemRef, { void: true }, { merge: true });
-
-    } catch (e) {
-        Swal.fire("Error", "Void failed: " + e.message, "error");
-    } finally {
-        setLoading(false);
+            list.appendChild(row);
+        });
+        list.scrollTop = list.scrollHeight;
     }
-}
 
-// --- 5. COUPONS ---
-window.app.addCoupon = async function (type) {
-    if (!state.currentRunId) return Swal.fire("Warning", "Open new bill first", "warning");
+    function recalcTotals() {
+        let subtotal = 0;
+        let lineDiscounts = 0;
+        state.cartItems.forEach(item => {
+            if (!item.void) {
+                subtotal += (item.lineAmount || 0);
+                lineDiscounts += (item.discountAmount || 0);
+            }
+        });
+        let couponDiscounts = 0;
+        state.coupons.forEach(c => couponDiscounts -= (c.amount || 0));
 
-    const label = type.charAt(0).toUpperCase() + type.slice(1);
-    const { value: formValues } = await Swal.fire({
-        title: `Add ${label} Coupon`,
-        html: `
+        const net = subtotal + lineDiscounts + couponDiscounts;
+
+        const elSub = getElement('summarySubtotal');
+        const elDisc = getElement('summaryDiscount');
+        const elNet = getElement('summaryNetTotal');
+
+        if (elSub) elSub.textContent = subtotal.toFixed(2);
+        if (elDisc) elDisc.textContent = (lineDiscounts + couponDiscounts).toFixed(2);
+        if (elNet) elNet.textContent = net.toFixed(2);
+
+        state.calculatedNetTotal = net;
+    }
+
+    // --- 4. VOID ---
+    window.app.voidItem = async function (itemId) {
+        if (!confirm("Confirm Void?")) return;
+        setLoading(true);
+        try {
+            // BACKEND bypass: Direct Update
+            // await apiCall(`/runs/${state.currentRunId}/items/${itemId}/void`, 'POST');
+            const itemRef = doc(db, "runs", state.currentRunId, "items", itemId);
+            await setDoc(itemRef, { void: true }, { merge: true });
+
+        } catch (e) {
+            Swal.fire("Error", "Void failed: " + e.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // --- 5. COUPONS ---
+    window.app.addCoupon = async function (type) {
+        if (!state.currentRunId) return Swal.fire("Warning", "Open new bill first", "warning");
+
+        const label = type.charAt(0).toUpperCase() + type.slice(1);
+        const { value: formValues } = await Swal.fire({
+            title: `Add ${label} Coupon`,
+            html: `
             <div class="space-y-3">
                 <input id="swal-code" class="swal2-input w-full" placeholder="Coupon Code" style="margin: 0 auto;">
                 <input id="swal-amount" type="number" step="0.01" class="swal2-input w-full" placeholder="Discount Amount" style="margin: 0 auto;">
             </div>
         `,
-        focusConfirm: false,
-        preConfirm: () => {
-            return [
-                document.getElementById('swal-code').value,
-                document.getElementById('swal-amount').value
-            ]
-        }
-    });
+            focusConfirm: false,
+            preConfirm: () => {
+                return [
+                    document.getElementById('swal-code').value,
+                    document.getElementById('swal-amount').value
+                ]
+            }
+        });
 
-    if (formValues) {
-        const [code, amt] = formValues;
-        if (!amt) return;
+        if (formValues) {
+            const [code, amt] = formValues;
+            if (!amt) return;
+            setLoading(true);
+            try {
+                await addDoc(collection(db, "runs", state.currentRunId, "coupons"), {
+                    type: type,
+                    code: code || '',
+                    amount: parseFloat(amt),
+                    createdAt: Timestamp.now()
+                });
+                Swal.fire("Success", `${label} Coupon Added`, "success");
+            } catch (e) {
+                console.error(e);
+                Swal.fire("Error", "Failed to add coupon: " + e.message, "error");
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    // --- 6. CLOSE BILL ---
+    async function handlePayment(method) {
+        if (!state.currentRunId) return;
+        const paymentDetails = { method };
+        if (method === 'cash') {
+            const { value: paid } = await Swal.fire({
+                title: 'Cash Received',
+                input: 'number'
+            });
+            if (!paid) return;
+            paymentDetails.paid = parseFloat(paid);
+        }
+
         setLoading(true);
         try {
-            await addDoc(collection(db, "runs", state.currentRunId, "coupons"), {
-                type: type,
-                code: code || '',
-                amount: parseFloat(amt),
-                createdAt: Timestamp.now()
+            // BACKEND bypass: Direct Close
+            // const res = await apiCall(`/runs/${state.currentRunId}/close`, 'POST', { payment: paymentDetails });
+
+            const runRef = doc(db, "runs", state.currentRunId);
+            const netTotal = state.calculatedNetTotal;
+            const change = (paymentDetails.paid || 0) - netTotal;
+
+            await setDoc(runRef, {
+                status: 'closed',
+                closedAt: Timestamp.now(),
+                payment: paymentDetails,
+                netTotal: netTotal,
+                change: change
+            }, { merge: true });
+
+            // Success
+            Swal.fire({
+                icon: 'success',
+                title: 'Bill Closed',
+                text: `Change: ${change.toFixed(2)} THB`
             });
-            Swal.fire("Success", `${label} Coupon Added`, "success");
+
+            // Reset
+            state.currentRunId = null;
+            const runIdDisplay = getElement('runIdDisplay');
+            if (runIdDisplay) runIdDisplay.textContent = '-';
+
+            setupLiveToken(null);
+            renderCart(); // Clears it
+            enableControls(false);
+
         } catch (e) {
-            console.error(e);
-            Swal.fire("Error", "Failed to add coupon: " + e.message, "error");
+            Swal.fire("Error", "Close failed: " + e.message, "error");
         } finally {
             setLoading(false);
         }
     }
-};
 
-// --- 6. CLOSE BILL ---
-async function handlePayment(method) {
-    if (!state.currentRunId) return;
-    const paymentDetails = { method };
-    if (method === 'cash') {
-        const { value: paid } = await Swal.fire({
-            title: 'Cash Received',
-            input: 'number'
+    const btnPayCash = getElement('btnPayCash');
+    if (btnPayCash) btnPayCash.addEventListener('click', () => handlePayment('cash'));
+
+    const btnPayCredit = getElement('btnPayCredit');
+    if (btnPayCredit) btnPayCredit.addEventListener('click', () => handlePayment('credit'));
+
+    // --- INPUTS ---
+    const inputBarcode = getElement('inputBarcode');
+    const inputQty = getElement('inputQty');
+    if (inputBarcode) {
+        inputBarcode.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') handleScan(inputBarcode.value.trim(), parseInt(inputQty?.value) || 1);
         });
-        if (!paid) return;
-        paymentDetails.paid = parseFloat(paid);
     }
-
-    setLoading(true);
-    try {
-        // BACKEND bypass: Direct Close
-        // const res = await apiCall(`/runs/${state.currentRunId}/close`, 'POST', { payment: paymentDetails });
-
-        const runRef = doc(db, "runs", state.currentRunId);
-        const netTotal = state.calculatedNetTotal;
-        const change = (paymentDetails.paid || 0) - netTotal;
-
-        await setDoc(runRef, {
-            status: 'closed',
-            closedAt: Timestamp.now(),
-            payment: paymentDetails,
-            netTotal: netTotal,
-            change: change
-        }, { merge: true });
-
-        // Success
-        Swal.fire({
-            icon: 'success',
-            title: 'Bill Closed',
-            text: `Change: ${change.toFixed(2)} THB`
-        });
-
-        // Reset
-        state.currentRunId = null;
-        const runIdDisplay = getElement('runIdDisplay');
-        if (runIdDisplay) runIdDisplay.textContent = '-';
-
-        setupLiveToken(null);
-        renderCart(); // Clears it
-        enableControls(false);
-
-    } catch (e) {
-        Swal.fire("Error", "Close failed: " + e.message, "error");
-    } finally {
-        setLoading(false);
-    }
-}
-
-const btnPayCash = getElement('btnPayCash');
-if (btnPayCash) btnPayCash.addEventListener('click', () => handlePayment('cash'));
-
-const btnPayCredit = getElement('btnPayCredit');
-if (btnPayCredit) btnPayCredit.addEventListener('click', () => handlePayment('credit'));
-
-// --- INPUTS ---
-const inputBarcode = getElement('inputBarcode');
-const inputQty = getElement('inputQty');
-if (inputBarcode) {
-    inputBarcode.addEventListener('keyup', (e) => {
-        if (e.key === 'Enter') handleScan(inputBarcode.value.trim(), parseInt(inputQty?.value) || 1);
+    document.addEventListener('keydown', (e) => {
+        if (e.altKey && e.key.toLowerCase() === 'q') {
+            e.preventDefault();
+            if (inputQty) {
+                inputQty.focus();
+                inputQty.select();
+            }
+        }
     });
-}
-document.addEventListener('keydown', (e) => {
-    if (e.altKey && e.key.toLowerCase() === 'q') {
-        e.preventDefault();
-        if (inputQty) {
-            inputQty.focus();
-            inputQty.select();
-        }
+
+    // --- 7. SEARCH & STATS ---
+    const searchInput = getElement('inputSearch');
+    const searchResults = getElement('searchResults');
+    const totalItemsDisplay = getElement('totalItemsDisplay');
+
+    // Debounce helper
+    function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
     }
-});
 
-// --- 7. SEARCH & STATS ---
-const searchInput = getElement('inputSearch');
-const searchResults = getElement('searchResults');
-const totalItemsDisplay = getElement('totalItemsDisplay');
-
-// Debounce helper
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-}
-
-async function updateTotalCount() {
-    if (!totalItemsDisplay) return;
-    try {
-        const coll = collection(db, "products");
-        const snapshot = await getCountFromServer(coll);
-        totalItemsDisplay.textContent = snapshot.data().count.toLocaleString();
-    } catch (e) {
-        console.error("Count failed", e);
-    }
-}
-
-// Initial count load
-onAuthStateChanged(auth, (user) => {
-    if (user) updateTotalCount();
-});
-
-if (searchInput && searchResults) {
-    searchInput.addEventListener('input', debounce(async (e) => {
-        const term = e.target.value.trim();
-        if (term.length < 2) {
-            searchResults.classList.add('hidden');
-            return;
-        }
-
+    async function updateTotalCount() {
+        if (!totalItemsDisplay) return;
         try {
-            // Search by Code (Exact mostly) OR Name (Prefix)
-            // Firestore OR queries are limited, better to do two simple queries and merge
-            // 1. Code prefix
-            const codeQ = query(
-                collection(db, "products"),
-                where("productCode", ">=", term),
-                where("productCode", "<=", term + '\uf8ff'),
-                limit(5)
-            );
-
-            // 2. Name prefix
-            // Note: Case sensitivity is an issue in Firestore. Assuming stored as is.
-            // For a robust search, we'd need a normalized lower-case field. 
-            // We'll try a direct prefix match on 'desc' for now.
-            const nameQ = query(
-                collection(db, "products"),
-                where("desc", ">=", term),
-                where("desc", "<=", term + '\uf8ff'),
-                limit(5)
-            );
-
-            const [codeSnap, nameSnap] = await Promise.all([getDocs(codeQ), getDocs(nameQ)]);
-
-            const results = new Map();
-            codeSnap.forEach(d => results.set(d.id, d.data()));
-            nameSnap.forEach(d => results.set(d.id, d.data()));
-
-            renderSearchResults(Array.from(results.values()));
-
+            const coll = collection(db, "products");
+            const snapshot = await getCountFromServer(coll);
+            totalItemsDisplay.textContent = snapshot.data().count.toLocaleString();
         } catch (e) {
-            console.error("Search error", e);
+            console.error("Count failed", e);
         }
-    }, 300));
+    }
 
-    // Hide on click outside
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.classList.add('hidden');
-        }
+    // Initial count load
+    onAuthStateChanged(auth, (user) => {
+        if (user) updateTotalCount();
     });
-}
 
-function renderSearchResults(items) {
-    if (!searchResults) return;
+    if (searchInput && searchResults) {
+        searchInput.addEventListener('input', debounce(async (e) => {
+            const term = e.target.value.trim();
+            if (term.length < 2) {
+                searchResults.classList.add('hidden');
+                return;
+            }
 
-    if (items.length === 0) {
-        searchResults.innerHTML = `<div class="p-3 text-sm text-gray-500 text-center">No results found</div>`;
-    } else {
-        searchResults.innerHTML = items.map(item => `
+            try {
+                // Search by Code (Exact mostly) OR Name (Prefix)
+                // Firestore OR queries are limited, better to do two simple queries and merge
+                // 1. Code prefix
+                const codeQ = query(
+                    collection(db, "products"),
+                    where("productCode", ">=", term),
+                    where("productCode", "<=", term + '\uf8ff'),
+                    limit(5)
+                );
+
+                // 2. Name prefix
+                // Note: Case sensitivity is an issue in Firestore. Assuming stored as is.
+                // For a robust search, we'd need a normalized lower-case field. 
+                // We'll try a direct prefix match on 'desc' for now.
+                const nameQ = query(
+                    collection(db, "products"),
+                    where("desc", ">=", term),
+                    where("desc", "<=", term + '\uf8ff'),
+                    limit(5)
+                );
+
+                const [codeSnap, nameSnap] = await Promise.all([getDocs(codeQ), getDocs(nameQ)]);
+
+                const results = new Map();
+                codeSnap.forEach(d => results.set(d.id, d.data()));
+                nameSnap.forEach(d => results.set(d.id, d.data()));
+
+                renderSearchResults(Array.from(results.values()));
+
+            } catch (e) {
+                console.error("Search error", e);
+            }
+        }, 300));
+
+        // Hide on click outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+    }
+
+    function renderSearchResults(items) {
+        if (!searchResults) return;
+
+        if (items.length === 0) {
+            searchResults.innerHTML = `<div class="p-3 text-sm text-gray-500 text-center">No results found</div>`;
+        } else {
+            searchResults.innerHTML = items.map(item => `
             <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-none transition flex justify-between items-center group" 
                  onclick="app.selectSearchItem('${item.productCode}')">
                 <div>
@@ -826,24 +876,24 @@ function renderSearchResults(items) {
                 <div class="font-bold text-gray-600">${(item.unitPrice || 0).toFixed(2)}</div>
             </div>
         `).join('');
+        }
+        searchResults.classList.remove('hidden');
     }
-    searchResults.classList.remove('hidden');
-}
 
-window.app.selectSearchItem = function (code) {
-    const inputBarcode = getElement('inputBarcode');
-    if (inputBarcode) {
-        inputBarcode.value = code;
-        inputBarcode.disabled = false; // Just in case
-        inputBarcode.focus();
-        // Trigger scan if ready
-        const inputQty = getElement('inputQty');
-        handleScan(code, parseInt(inputQty?.value) || 1);
+    window.app.selectSearchItem = function (code) {
+        const inputBarcode = getElement('inputBarcode');
+        if (inputBarcode) {
+            inputBarcode.value = code;
+            inputBarcode.disabled = false; // Just in case
+            inputBarcode.focus();
+            // Trigger scan if ready
+            const inputQty = getElement('inputQty');
+            handleScan(code, parseInt(inputQty?.value) || 1);
 
-        // Clear search
-        const searchInput = getElement('inputSearch');
-        const searchResults = getElement('searchResults');
-        if (searchInput) searchInput.value = '';
-        if (searchResults) searchResults.classList.add('hidden');
+            // Clear search
+            const searchInput = getElement('inputSearch');
+            const searchResults = getElement('searchResults');
+            if (searchInput) searchInput.value = '';
+            if (searchResults) searchResults.classList.add('hidden');
+        }
     }
-}
