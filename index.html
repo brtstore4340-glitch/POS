@@ -117,6 +117,10 @@
                     </svg>
                     Daily Summary
                 </button>
+                <div class="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide">Products:</span>
+                    <span id="totalItemsDisplay" class="text-sm font-bold text-brand-600 font-mono">-</span>
+                </div>
                 <button onclick="app.requestImport()"
                     class="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition border border-gray-200">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,6 +159,26 @@
                     </svg>
                     <span class="text-lg font-bold font-thai relative z-10">เปิดบิลใหม่ (New Bill)</span>
                 </button>
+
+                <!-- Search Input -->
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400 group-focus-within:text-brand-500 transition-colors"
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input type="text" id="inputSearch"
+                        class="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:placeholder-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm shadow-sm transition-all"
+                        placeholder="Search product (Code/Name)...">
+
+                    <!-- Search Results Dropdown -->
+                    <div id="searchResults"
+                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 max-h-64 overflow-y-auto z-50 divide-y divide-gray-50">
+                        <!-- Results injected here -->
+                    </div>
+                </div>
 
                 <!-- Input Zone -->
                 <div class="bg-gray-50 p-5 rounded-xl border border-gray-100 shadow-inner space-y-4">

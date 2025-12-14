@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import {
-    getFirestore, collection, doc, query, where, onSnapshot, orderBy, writeBatch, setDoc, getDocs, addDoc, Timestamp
+    getFirestore, collection, doc, query, where, onSnapshot, orderBy, writeBatch, setDoc, getDocs, addDoc, Timestamp, getCountFromServer, limit
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
@@ -201,6 +201,7 @@ async function handleImportData(file) {
             title: 'Import Completed',
             text: `Successfully processed ${total} items.`
         });
+        updateTotalCount();
     } catch (e) {
         console.error(e);
         Swal.fire("Error", "Import failed: " + e.message, "error");
@@ -635,3 +636,122 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// --- 7. SEARCH & STATS ---
+const searchInput = getElement('inputSearch');
+const searchResults = getElement('searchResults');
+const totalItemsDisplay = getElement('totalItemsDisplay');
+
+// Debounce helper
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+async function updateTotalCount() {
+    if (!totalItemsDisplay) return;
+    try {
+        const coll = collection(db, "products");
+        const snapshot = await getCountFromServer(coll);
+        totalItemsDisplay.textContent = snapshot.data().count.toLocaleString();
+    } catch (e) {
+        console.error("Count failed", e);
+    }
+}
+
+// Initial count load
+onAuthStateChanged(auth, (user) => {
+    if (user) updateTotalCount();
+});
+
+if (searchInput && searchResults) {
+    searchInput.addEventListener('input', debounce(async (e) => {
+        const term = e.target.value.trim();
+        if (term.length < 2) {
+            searchResults.classList.add('hidden');
+            return;
+        }
+
+        try {
+            // Search by Code (Exact mostly) OR Name (Prefix)
+            // Firestore OR queries are limited, better to do two simple queries and merge
+            // 1. Code prefix
+            const codeQ = query(
+                collection(db, "products"),
+                where("productCode", ">=", term),
+                where("productCode", "<=", term + '\uf8ff'),
+                limit(5)
+            );
+
+            // 2. Name prefix
+            // Note: Case sensitivity is an issue in Firestore. Assuming stored as is.
+            // For a robust search, we'd need a normalized lower-case field. 
+            // We'll try a direct prefix match on 'desc' for now.
+            const nameQ = query(
+                collection(db, "products"),
+                where("desc", ">=", term),
+                where("desc", "<=", term + '\uf8ff'),
+                limit(5)
+            );
+
+            const [codeSnap, nameSnap] = await Promise.all([getDocs(codeQ), getDocs(nameQ)]);
+
+            const results = new Map();
+            codeSnap.forEach(d => results.set(d.id, d.data()));
+            nameSnap.forEach(d => results.set(d.id, d.data()));
+
+            renderSearchResults(Array.from(results.values()));
+
+        } catch (e) {
+            console.error("Search error", e);
+        }
+    }, 300));
+
+    // Hide on click outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.classList.add('hidden');
+        }
+    });
+}
+
+function renderSearchResults(items) {
+    if (!searchResults) return;
+
+    if (items.length === 0) {
+        searchResults.innerHTML = `<div class="p-3 text-sm text-gray-500 text-center">No results found</div>`;
+    } else {
+        searchResults.innerHTML = items.map(item => `
+            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-none transition flex justify-between items-center group" 
+                 onclick="app.selectSearchItem('${item.productCode}')">
+                <div>
+                    <div class="font-medium text-gray-800 group-hover:text-brand-600 transition">${item.desc}</div>
+                    <div class="text-xs text-gray-400 font-mono">${item.productCode}</div>
+                </div>
+                <div class="font-bold text-gray-600">${(item.unitPrice || 0).toFixed(2)}</div>
+            </div>
+        `).join('');
+    }
+    searchResults.classList.remove('hidden');
+}
+
+window.app.selectSearchItem = function (code) {
+    const inputBarcode = getElement('inputBarcode');
+    if (inputBarcode) {
+        inputBarcode.value = code;
+        inputBarcode.disabled = false; // Just in case
+        inputBarcode.focus();
+        // Trigger scan if ready
+        const inputQty = getElement('inputQty');
+        handleScan(code, parseInt(inputQty?.value) || 1);
+
+        // Clear search
+        const searchInput = getElement('inputSearch');
+        const searchResults = getElement('searchResults');
+        if (searchInput) searchInput.value = '';
+        if (searchResults) searchResults.classList.add('hidden');
+    }
+}
