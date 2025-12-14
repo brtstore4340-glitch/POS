@@ -18,8 +18,6 @@ const firebaseConfig = {
     measurementId: "G-JP87NSS5XV"
 };
 
-// Estimated URL based on Project ID (boots-thailand-pos-project) and Region (europe-west1)
-// Function name assumed to be 'api'. If 404, try 'app' or check Console.
 const API_BASE_URL = "https://europe-west1-boots-thailand-pos-project.cloudfunctions.net/api";
 
 // Initialize Firebase
@@ -33,60 +31,70 @@ window.app = window.app || {};
 window.app.firebase = firebaseApp;
 
 // ==========================================
-// STATE MANAGEMENT & DOM ELEMENTS
+// STATE MANAGEMENT
 // ==========================================
 const state = {
     currentRunId: null, // Bill ID
     cartItems: [],
     coupons: [],
     loading: false,
-    user: null
+    user: null,
+    calculatedNetTotal: 0
 };
 
-const UI = {
-    btnNewBill: document.getElementById('btnNewBill'),
-    inputQty: document.getElementById('inputQty'),
-    inputBarcode: document.getElementById('inputBarcode'),
-    cartList: document.getElementById('cartItemsList'),
-    subtotal: document.getElementById('summarySubtotal'),
-    discount: document.getElementById('summaryDiscount'),
-    netTotal: document.getElementById('summaryNetTotal'),
-    status: document.getElementById('connectionStatus'),
-    runIdDisplay: document.getElementById('runIdDisplay'),
-    btnPayCash: document.getElementById('btnPayCash'),
-    btnSeed: document.getElementById('btnSeed'),
-    btnDailySummary: document.getElementById('btnDailySummary'),
-    fileImport: document.getElementById('fileImport')
-};
+// ==========================================
+// HELPER: DYNAMIC DOM ACCESS
+// ==========================================
+function getElement(id) {
+    const el = document.getElementById(id);
+    if (!el) {
+        console.warn(`DOM Element not found: #${id}`);
+        return null; // Handle gracefully
+    }
+    return el;
+}
+
+function setLoading(b) {
+    state.loading = b;
+    if (b) Swal.showLoading(); else Swal.close();
+}
 
 // ==========================================
 // AUTH & BOOTSTRAP
 // ==========================================
 onAuthStateChanged(auth, (user) => {
+    const statusEl = getElement('connectionStatus');
     if (user) {
         state.user = user;
-        UI.status.textContent = "Online (Anon)";
-        UI.status.className = "px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800";
-        // Do not auto-enable inputs, waiting for "New Bill"
+        if (statusEl) {
+            statusEl.textContent = "Online (Anon)";
+            statusEl.className = "px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800";
+        }
         console.log("Signed in as", user.uid);
     } else {
-        UI.status.textContent = "Disconnected";
-        UI.status.className = "px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800";
+        if (statusEl) {
+            statusEl.textContent = "Disconnected";
+            statusEl.className = "px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800";
+        }
         // Auto-login silently
         signInAnonymously(auth).catch((error) => {
             console.error("Auth failed", error);
-            // Don't disturb user with alert unless persistent
-            UI.status.textContent = "Offline";
+            if (statusEl) statusEl.textContent = "Offline";
         });
     }
 });
 
 function enableControls(enabled) {
-    UI.inputBarcode.disabled = !enabled;
-    UI.btnPayCash.disabled = !enabled;
-    if (enabled && UI.inputBarcode) {
-        UI.inputBarcode.focus();
+    const barcodeInput = getElement('inputBarcode');
+    const cashBtn = getElement('btnPayCash');
+
+    if (barcodeInput) {
+        barcodeInput.disabled = !enabled;
+        if (enabled) {
+            setTimeout(() => barcodeInput.focus(), 150);
+        }
     }
+    if (cashBtn) cashBtn.disabled = !enabled;
 }
 
 // ==========================================
@@ -102,16 +110,20 @@ window.app.requestImport = async function () {
     });
 
     if (password === 'BootsG5**4340++') {
-        UI.fileImport.click();
+        const fileInput = getElement('fileImport');
+        if (fileInput) fileInput.click();
     } else if (password) {
         Swal.fire("Access Denied", "Incorrect Password", "error");
     }
 };
 
-UI.fileImport.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) handleImportData(file);
-});
+const fileImportEl = getElement('fileImport');
+if (fileImportEl) {
+    fileImportEl.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleImportData(file);
+    });
+}
 
 async function handleImportData(file) {
     if (!state.user) return Swal.fire("Error", "Wait for connection...", "error");
@@ -122,20 +134,36 @@ async function handleImportData(file) {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Process in batches of 400 (Firestore limit is 500)
         const batchSize = 400;
         let batch = writeBatch(db);
         let count = 0;
         let total = 0;
 
-        for (const row of jsonData) {
-            // Map columns: Itemcode, Barcodes, Item Name, Price, Promotion
-            const pCode = String(row['Itemcode'] || '').trim();
-            const name = row['Item Name'] || row['Item Name (ENG)'] || 'Unknown';
-            const price = parseFloat(row['Price']) || 0;
-            const promo = row['Promotion'] || null;
+        if (jsonData.length === 0) {
+            return Swal.fire("Error", "Excel file appears empty", "warning");
+        }
 
-            if (!pCode) continue;
+        // Flexible Column Mapping
+        const findKey = (row, ...candidates) => {
+            const keys = Object.keys(row);
+            for (const c of candidates) {
+                const match = keys.find(k => k.toLowerCase().trim() === c.toLowerCase().trim());
+                if (match) return row[match];
+            }
+            return null;
+        };
+
+        for (const row of jsonData) {
+            const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
+            const name = findKey(row, 'Item Name', 'ItemName', 'Description', 'Name') || 'Unknown';
+            const price = parseFloat(findKey(row, 'Price', 'Retail Price', 'Unit Price') || 0);
+            const promo = findKey(row, 'Promotion', 'Promo', 'Tag') || null;
+            const barcodeRaw = String(findKey(row, 'Barcodes', 'Barcode', 'EAN') || '');
+
+            if (!pCode) {
+                console.warn("Skipping row missing Itemcode:", row);
+                continue;
+            }
 
             // 1. Create/Update Product
             const productRef = doc(db, "products", pCode);
@@ -148,10 +176,7 @@ async function handleImportData(file) {
             }, { merge: true });
 
             // 2. Map Barcodes
-            // "Barcodes" column might be comma separated? Assuming simple string for now or comma split
-            const barcodeRaw = String(row['Barcodes'] || '');
             const barcodes = barcodeRaw.split(',').map(b => b.trim()).filter(b => b);
-
             for (const code of barcodes) {
                 if (code) {
                     const barcodeRef = doc(db, "barcodes", code);
@@ -171,66 +196,66 @@ async function handleImportData(file) {
             }
         }
         if (count > 0) await batch.commit();
-
         Swal.fire("Success", `Imported ${total} items successfully.`, "success");
     } catch (e) {
         console.error(e);
         Swal.fire("Error", "Import failed: " + e.message, "error");
     } finally {
         setLoading(false);
-        UI.fileImport.value = ''; // Reset
+        if (fileImportEl) fileImportEl.value = '';
     }
 }
 
 // ==========================================
 // DAILY SUMMARY
 // ==========================================
-UI.btnDailySummary.addEventListener('click', async () => {
-    if (!state.user) return;
-    setLoading(true);
-    try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const startTimestamp = Timestamp.fromDate(today);
+const btnDailySummary = getElement('btnDailySummary');
+if (btnDailySummary) {
+    btnDailySummary.addEventListener('click', async () => {
+        if (!state.user) return;
+        setLoading(true);
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const startTimestamp = Timestamp.fromDate(today);
 
-        const q = query(
-            collection(db, "runs"),
-            where("createdAt", ">=", startTimestamp)
-            // Note: If you need endpoint, use apiCall. But client-side query is fine for simple summary (if rules allow).
-        );
+            const q = query(
+                collection(db, "runs"),
+                where("createdAt", ">=", startTimestamp)
+            );
 
-        const snapshot = await getDocs(q);
-        let totalSales = 0;
-        let count = 0;
+            const snapshot = await getDocs(q);
+            let totalSales = 0;
+            let count = 0;
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.status === 'closed') {
-                totalSales += (data.netTotal || 0);
-                count++;
-            }
-        });
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.status === 'closed') {
+                    totalSales += (data.netTotal || 0);
+                    count++;
+                }
+            });
 
-        Swal.fire({
-            title: 'Daily Summary',
-            html: `
-                <div class="text-left">
-                    <p><strong>Date:</strong> ${today.toLocaleDateString('th-TH')}</p>
-                    <p><strong>Bills:</strong> ${count}</p>
-                    <hr class="my-2">
-                    <p class="text-xl"><strong>Total:</strong> <span class="text-green-600">${totalSales.toLocaleString()} THB</span></p>
-                </div>
-            `,
-            icon: 'info'
-        });
-
-    } catch (e) {
-        console.error(e);
-        Swal.fire("Error", "Could not load summary. " + e.message, "error");
-    } finally {
-        setLoading(false);
-    }
-});
+            Swal.fire({
+                title: 'Daily Summary',
+                html: `
+                    <div class="text-left">
+                        <p><strong>Date:</strong> ${today.toLocaleDateString('th-TH')}</p>
+                        <p><strong>Bills:</strong> ${count}</p>
+                        <hr class="my-2">
+                        <p class="text-xl"><strong>Total:</strong> <span class="text-green-600">${totalSales.toLocaleString()} THB</span></p>
+                    </div>
+                `,
+                icon: 'info'
+            });
+        } catch (e) {
+            console.error(e);
+            Swal.fire("Error", "Could not load summary. " + e.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    });
+}
 
 // ==========================================
 // API CLIENT
@@ -239,11 +264,8 @@ async function apiCall(endpoint, method, body = {}) {
     if (API_BASE_URL.includes("YOUR_CLOUD_FUNCTIONS")) {
         throw new Error("Please configure API_BASE_URL in app.js");
     }
-
     const token = state.user ? await state.user.getIdToken() : null;
-    const headers = {
-        'Content-Type': 'application/json'
-    };
+    const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -264,30 +286,46 @@ async function apiCall(endpoint, method, body = {}) {
 // ==========================================
 
 // --- 1. NEW BILL ---
-UI.btnNewBill.addEventListener('click', async () => {
-    if (!state.user) return;
-    setLoading(true);
-    try {
-        // API: Create Unit
-        const res = await apiCall('/runs/open', 'POST');
-        // Expected res: { runId: "...", billNo: "..." }
+const btnNewBill = getElement('btnNewBill');
+if (btnNewBill) {
+    btnNewBill.addEventListener('click', async () => {
+        if (!state.user) return;
+        setLoading(true);
+        try {
+            // BACKEND bypass: Use Direct Firestore due to CORS on localhost
+            // const res = await apiCall('/runs/open', 'POST');
 
-        state.currentRunId = res.runId;
-        state.coupons = [];
+            const runRef = await addDoc(collection(db, "runs"), {
+                createdAt: Timestamp.now(),
+                status: 'open',
+                cashierId: state.user.uid,
+                subtotal: 0,
+                discount: 0,
+                netTotal: 0,
+                coupons: []
+            });
 
-        UI.runIdDisplay.innerText = `Run ID: ${res.billNo || res.runId}`;
+            state.currentRunId = runRef.id;
+            state.coupons = [];
 
-        setupLiveToken(state.currentRunId);
-        enableControls(true);
-        UI.inputBarcode.focus();
+            const runIdDisplay = getElement('runIdDisplay');
+            if (runIdDisplay) runIdDisplay.innerText = `Run ID: ${runRef.id.slice(0, 8).toUpperCase()}`;
 
-    } catch (e) {
-        console.error(e);
-        Swal.fire("Error", e.message, "error");
-    } finally {
-        setLoading(false);
-    }
-});
+            setupLiveToken(state.currentRunId);
+            enableControls(true);
+
+            // Explicit focus
+            const barcodeInput = getElement('inputBarcode');
+            if (barcodeInput) barcodeInput.focus();
+
+        } catch (e) {
+            console.error(e);
+            Swal.fire("Error", e.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    });
+}
 
 // --- 2. SCAN / ADD ITEM ---
 async function handleScan(code, qty) {
@@ -295,44 +333,63 @@ async function handleScan(code, qty) {
         Swal.fire("Warning", "Open new bill first", "warning");
         return;
     }
-
     setLoading(true);
     try {
-        // Step A: Resolve Barcode (Optional if API does it, but spec says /barcode/resolve)
-        // Check if input is barcode or product code?
-        // Assuming API /items/add takes productCode or barcode? 
-        // Gemini 3 said: "POST /barcode/resolve ... uses barcodes collection"
-        // And "POST /runs/:runId/items/add ... saves line items"
+        // BACKEND bypass: Use Direct Firestore Logic
 
-        // Let's try to resolve first if it looks like barcode (e.g. > 7 digits) or just try resolve
+        // 1. Resolve Product
+        let product = null;
         let productCode = code;
 
-        // We'll call resolve. If it works, we get productCode. If not, maybe it IS productCode.
-        try {
-            const resolveRes = await apiCall('/barcode/resolve', 'POST', { barcode: code });
-            if (resolveRes && resolveRes.productCode) {
-                productCode = resolveRes.productCode;
+        // Try direct fetch from products collection
+        const productRef = doc(db, "products", code);
+        const productSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", code)));
+
+        if (!productSnap.empty) {
+            product = productSnap.docs[0].data();
+            productCode = product.productCode;
+        } else {
+            // Try lookup via barcodes collection
+            const barcodeRef = doc(db, "barcodes", code);
+            const barcodeSnap = await getDocs(query(collection(db, "barcodes"), where("barcode", "==", code)));
+            if (!barcodeSnap.empty) {
+                const bData = barcodeSnap.docs[0].data();
+                productCode = bData.productCode;
+                // Fetch actual product
+                const pSnap = await getDocs(query(collection(db, "products"), where("productCode", "==", productCode)));
+                if (!pSnap.empty) product = pSnap.docs[0].data();
             }
-        } catch (ignore) {
-            // If resolve fails, assume 'code' might be the productCode itself or Invalid.
-            // We proceed to Try Add.
         }
 
-        // Step B: Add Item
-        await apiCall(`/runs/${state.currentRunId}/items/add`, 'POST', {
+        if (!product) {
+            throw new Error(`Product not found: ${code}`);
+        }
+
+        // 2. Add Item to Sub-collection
+        const lineTotal = (product.unitPrice || 0) * qty;
+        await addDoc(collection(db, "runs", state.currentRunId, "items"), {
             productCode: productCode,
-            qty: qty
+            desc: product.desc || 'Unknown',
+            qty: qty,
+            unitPrice: product.unitPrice || 0,
+            lineAmount: lineTotal,
+            discountAmount: 0,
+            promoTag: product.promoTag || null,
+            createdAt: Timestamp.now(),
+            void: false
         });
 
         // UI Reset
-        UI.inputQty.value = 1;
-        UI.inputBarcode.value = '';
-        UI.inputBarcode.focus();
+        const inputQty = getElement('inputQty');
+        const inputBarcode = getElement('inputBarcode');
+        if (inputQty) inputQty.value = 1;
+        if (inputBarcode) {
+            inputBarcode.value = '';
+            inputBarcode.focus();
+        }
 
     } catch (e) {
-        // Special case: Item not found
         if (e.message.includes("not found")) {
-            // Manual Input Trigger?
             const { value: manualCode } = await Swal.fire({
                 title: 'Item not found',
                 text: 'Please enter Product Code manually',
@@ -350,38 +407,38 @@ async function handleScan(code, qty) {
 
 // --- 3. LIVE CART (Firestore Listener) ---
 function setupLiveToken(runId) {
-    // We still Listen to Firestore for UI updates because Backend writes there.
+    if (!runId) return; // Detach logic if null?
+
+    // Listen to Items
     const itemsRef = collection(db, "runs", runId, "items");
-    const q = query(itemsRef, orderBy("createdAt", "asc")); // or lineNo
+    const q = query(itemsRef, orderBy("createdAt", "asc"));
 
     onSnapshot(q, (snapshot) => {
         state.cartItems = [];
         snapshot.forEach(d => state.cartItems.push({ id: d.id, ...d.data() }));
         renderCart();
-        // Calc local total for display, though Server calculates final.
-        // We can do client-side calc for snappy UI.
         recalcTotals();
     });
 
-    // Listen to Run Header for status/coupons
+    // Listen to Run Header
     onSnapshot(doc(db, "runs", runId), (snap) => {
         if (snap.exists()) {
             const data = snap.data();
             state.coupons = data.coupons || [];
-            if (data.status === 'closed') {
-                // If closed externally or by flow
-                // Disable controls?
-            }
+            // Re-calc with updated coupons
+            recalcTotals();
         }
     });
 }
 
-
 function renderCart() {
-    UI.cartList.innerHTML = '';
+    const list = getElement('cartItemsList');
+    if (!list) return;
+
+    list.innerHTML = '';
 
     if (state.cartItems.length === 0) {
-        UI.cartList.innerHTML = `
+        list.innerHTML = `
             <div class="h-full flex flex-col items-center justify-center text-gray-300 gap-4">
                 <svg class="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
                 <p class="font-medium">No items in cart</p>
@@ -393,9 +450,7 @@ function renderCart() {
     state.cartItems.forEach((item, index) => {
         const isVoid = item.void;
         const row = document.createElement('div');
-        // Match grid-cols-[50px_1fr_100px_100px_100px_80px]
         row.className = `grid grid-cols-[50px_1fr_100px_100px_100px_80px] gap-4 px-6 py-3 border-b border-gray-50 items-center hover:bg-gray-50 transition ${isVoid ? 'bg-red-50/50 opacity-60' : ''}`;
-
         row.innerHTML = `
             <div class="text-center text-gray-400 font-mono text-xs">${index + 1}</div>
             <div class="flex flex-col justify-center overflow-hidden">
@@ -413,10 +468,9 @@ function renderCart() {
                 ` : '<span class="text-xs text-red-500 font-bold uppercase">Void</span>'}
             </div>
         `;
-        UI.cartList.appendChild(row);
+        list.appendChild(row);
     });
-    // Auto scroll to bottom
-    UI.cartList.scrollTop = UI.cartList.scrollHeight;
+    list.scrollTop = list.scrollHeight;
 }
 
 function recalcTotals() {
@@ -431,11 +485,16 @@ function recalcTotals() {
     let couponDiscounts = 0;
     state.coupons.forEach(c => couponDiscounts -= (c.amount || 0));
 
-    const net = subtotal + lineDiscounts + couponDiscounts; // Discounts are negative in line items? API Spec said "discountAmount (-)"
+    const net = subtotal + lineDiscounts + couponDiscounts;
 
-    UI.subtotal.textContent = subtotal.toFixed(2);
-    UI.discount.textContent = (lineDiscounts + couponDiscounts).toFixed(2);
-    UI.netTotal.textContent = net.toFixed(2);
+    const elSub = getElement('summarySubtotal');
+    const elDisc = getElement('summaryDiscount');
+    const elNet = getElement('summaryNetTotal');
+
+    if (elSub) elSub.textContent = subtotal.toFixed(2);
+    if (elDisc) elDisc.textContent = (lineDiscounts + couponDiscounts).toFixed(2);
+    if (elNet) elNet.textContent = net.toFixed(2);
+
     state.calculatedNetTotal = net;
 }
 
@@ -444,19 +503,10 @@ window.app.voidItem = async function (itemId) {
     if (!confirm("Confirm Void?")) return;
     setLoading(true);
     try {
-        // API: runs/:runId/items/:itemId/void ? Or just update?
-        // Gemini 3 logic implies specific endpoints.
-        // If no explicit void endpoint, maybe we can't?
-        // Assuming there IS a void capability. Let's guess: POST /runs/:runId/items/:itemId/void
-        // OR standard REST: DELETE /runs/:runId/items/:itemId ?
-        // I will trust the "8 REST API Endpoints" mentioned by Gemini 3.
-        // Wait, Gemini 3 listed: /barcode/resolve, /runs/open, /runs/:id/items/add, /runs/:id/close.
-        // It did NOT list VOID.
-        // But it said "Endpoints like POST /runs/:runId/items/add".
-
-        // I will assume there is a VOID endpoint or I use a generic update?
-        // "Backend ... does BOGO Logic". Void needs BOGO Re-balance. So it MUST be a server endpoint.
-        await apiCall(`/runs/${state.currentRunId}/items/${itemId}/void`, 'POST');
+        // BACKEND bypass: Direct Update
+        // await apiCall(`/runs/${state.currentRunId}/items/${itemId}/void`, 'POST');
+        const itemRef = doc(db, "runs", state.currentRunId, "items", itemId);
+        await setDoc(itemRef, { void: true }, { merge: true });
 
     } catch (e) {
         Swal.fire("Error", "Void failed: " + e.message, "error");
@@ -466,12 +516,10 @@ window.app.voidItem = async function (itemId) {
 }
 
 // --- 5. COUPONS ---
-// --- 5. COUPONS ---
 window.app.addCoupon = async function (type) {
     if (!state.currentRunId) return Swal.fire("Warning", "Open new bill first", "warning");
 
     const label = type.charAt(0).toUpperCase() + type.slice(1);
-
     const { value: formValues } = await Swal.fire({
         title: `Add ${label} Coupon`,
         html: `
@@ -492,19 +540,14 @@ window.app.addCoupon = async function (type) {
     if (formValues) {
         const [code, amt] = formValues;
         if (!amt) return;
-
         setLoading(true);
         try {
-            // Save to Firestore: runs/{runId}/coupons
             await addDoc(collection(db, "runs", state.currentRunId, "coupons"), {
-                type: type, // 'store', 'vendor', 'mobile'
+                type: type,
                 code: code || '',
                 amount: parseFloat(amt),
                 createdAt: Timestamp.now()
             });
-            // Note: Cloud Function 'onCouponAdded' usually recalculates totals. 
-            // Or we rely on local recalcTotals for display until payment.
-
             Swal.fire("Success", `${label} Coupon Added`, "success");
         } catch (e) {
             console.error(e);
@@ -515,12 +558,9 @@ window.app.addCoupon = async function (type) {
     }
 };
 
-
 // --- 6. CLOSE BILL ---
 async function handlePayment(method) {
     if (!state.currentRunId) return;
-
-    // Collect details
     const paymentDetails = { method };
     if (method === 'cash') {
         const { value: paid } = await Swal.fire({
@@ -529,35 +569,39 @@ async function handlePayment(method) {
         });
         if (!paid) return;
         paymentDetails.paid = parseFloat(paid);
-        // Change calc logic is usually Client side helper, but Server needs final verification?
-        // We send what was paid. Server calculates change?
-        // API: "POST /runs/:runId/close ... saves payment"
-    } else {
-        // Credit
-        const { value: last4 } = await Swal.fire({ title: 'Card Last 4', input: 'text' });
-        if (!last4) return;
-        paymentDetails.cardLast4 = last4;
-        paymentDetails.paid = state.calculatedNetTotal; // Full amount
     }
 
     setLoading(true);
     try {
-        const res = await apiCall(`/runs/${state.currentRunId}/close`, 'POST', {
-            payment: paymentDetails
-        });
+        // BACKEND bypass: Direct Close
+        // const res = await apiCall(`/runs/${state.currentRunId}/close`, 'POST', { payment: paymentDetails });
+
+        const runRef = doc(db, "runs", state.currentRunId);
+        const netTotal = state.calculatedNetTotal;
+        const change = (paymentDetails.paid || 0) - netTotal;
+
+        await setDoc(runRef, {
+            status: 'closed',
+            closedAt: Timestamp.now(),
+            payment: paymentDetails,
+            netTotal: netTotal,
+            change: change
+        }, { merge: true });
 
         // Success
         Swal.fire({
             icon: 'success',
             title: 'Bill Closed',
-            text: `Change: ${res.change || (paymentDetails.paid - res.netTotal) || 0} THB`
+            text: `Change: ${change.toFixed(2)} THB`
         });
 
         // Reset
         state.currentRunId = null;
-        UI.runIdDisplay.textContent = '-';
-        setupLiveToken(null); // Detach
-        UI.cartList.innerHTML = '';
+        const runIdDisplay = getElement('runIdDisplay');
+        if (runIdDisplay) runIdDisplay.textContent = '-';
+
+        setupLiveToken(null);
+        renderCart(); // Clears it
         enableControls(false);
 
     } catch (e) {
@@ -567,28 +611,23 @@ async function handlePayment(method) {
     }
 }
 
-UI.btnPayCash.addEventListener('click', () => handlePayment('cash'));
-// Credit payment removed as requested
-
+const btnPayCash = getElement('btnPayCash');
+if (btnPayCash) btnPayCash.addEventListener('click', () => handlePayment('cash'));
 
 // --- INPUTS ---
-UI.inputBarcode.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') handleScan(UI.inputBarcode.value.trim(), parseInt(UI.inputQty.value) || 1);
-});
+const inputBarcode = getElement('inputBarcode');
+const inputQty = getElement('inputQty');
+if (inputBarcode) {
+    inputBarcode.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') handleScan(inputBarcode.value.trim(), parseInt(inputQty?.value) || 1);
+    });
+}
 document.addEventListener('keydown', (e) => {
     if (e.altKey && e.key.toLowerCase() === 'q') {
-        e.preventDefault(); UI.inputQty.focus(); UI.inputQty.select();
+        e.preventDefault();
+        if (inputQty) {
+            inputQty.focus();
+            inputQty.select();
+        }
     }
 });
-
-
-// Export
-// window.app is already initialized and populated
-window.app.voidItem = window.app.voidItem; // Ensure accessible
-window.app.addCoupon = window.app.addCoupon;
-// window.app.requestImport is already assigned above
-
-function setLoading(b) {
-    state.loading = b;
-    if (b) Swal.showLoading(); else Swal.close();
-}
