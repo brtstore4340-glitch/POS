@@ -634,6 +634,9 @@ async function handlePayment(method) {
 const btnPayCash = getElement('btnPayCash');
 if (btnPayCash) btnPayCash.addEventListener('click', () => handlePayment('cash'));
 
+const btnPayCredit = getElement('btnPayCredit');
+if (btnPayCredit) btnPayCredit.addEventListener('click', () => handlePayment('credit'));
+
 // --- INPUTS ---
 const inputBarcode = getElement('inputBarcode');
 const inputQty = getElement('inputQty');

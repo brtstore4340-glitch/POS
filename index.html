@@ -2,45 +2,41 @@
 <html lang="th">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Boots POS System</title>
 
-    <!-- Fonts: Outfit (English) + Noto Sans Thai -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Fonts: Outfit (EN) + Noto Sans Thai -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+        rel="stylesheet" />
 
-    <!-- TailwindCSS -->
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['"Outfit"', '"Noto Sans Thai"', 'sans-serif'],
-                        thai: ['"Noto Sans Thai"', 'sans-serif']
+                        sans: ['"Outfit"', '"Noto Sans Thai"', "system-ui", "sans-serif"],
+                        thai: ['"Noto Sans Thai"', "system-ui", "sans-serif"],
                     },
                     colors: {
                         brand: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            500: '#3b82f6',
-                            600: '#2563eb', // Core Blue
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        }
+                            50: "#eff6ff",
+                            100: "#dbeafe",
+                            500: "#3b82f6",
+                            600: "#2563eb",
+                        },
                     },
                     boxShadow: {
-                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
-                        'glow': '0 0 15px rgba(37, 99, 235, 0.2)',
-                    }
-                }
-            }
-        }
+                        soft: "0 18px 55px rgba(15,23,42,0.08)",
+                    },
+                },
+            },
+        };
     </script>
 
     <!-- SweetAlert2 -->
@@ -50,16 +46,17 @@
 
     <style>
         body {
-            font-family: 'Outfit', 'Noto Sans Thai', sans-serif;
+            font-family: "Outfit", "Noto Sans Thai", system-ui, -apple-system,
+                BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         .font-thai {
-            font-family: 'Noto Sans Thai', sans-serif;
+            font-family: "Noto Sans Thai", system-ui, sans-serif;
         }
 
-        /* Modern Scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
+            height: 6px;
         }
 
         ::-webkit-scrollbar-track {
@@ -67,253 +64,304 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
+            background: #d4d4d8;
+            border-radius: 999px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: #a1a1aa;
         }
 
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
             margin: 0;
-        }
-
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
         }
     </style>
 </head>
 
-<body class="bg-gray-50 h-screen flex flex-col overflow-hidden text-gray-800">
+<body class="min-h-screen bg-slate-100 flex items-center justify-center px-3 sm:px-6 py-4">
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b border-gray-100 z-20 basis-16 shrink-0 relative">
-        <div class="h-full px-6 flex justify-between items-center">
-            <div class="flex items-center gap-4">
+    <!-- App Shell -->
+    <div class="max-w-6xl w-full bg-white rounded-[32px] shadow-soft border border-slate-100 overflow-hidden flex">
+
+        <!-- Sidebar -->
+        <aside class="hidden md:flex w-60 flex-col border-r border-slate-100 bg-slate-50/60">
+            <div class="px-6 pt-6 pb-4 flex items-center gap-3">
                 <div
-                    class="w-10 h-10 bg-brand-700 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-brand-500/30">
-                    B</div>
+                    class="w-9 h-9 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-sm font-semibold">
+                    B
+                </div>
                 <div>
-                    <h1 class="text-xl font-bold text-gray-900 tracking-tight">POS System</h1>
-                    <div id="connectionStatus" class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-gray-300 animate-pulse"></span>
-                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wider">Connecting...</span>
-                    </div>
+                    <p class="text-xs font-semibold tracking-[0.18em] uppercase text-slate-400">
+                        Boots
+                    </p>
+                    <p class="text-sm font-thai font-semibold text-slate-900">
+                        POS Station
+                    </p>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <button id="btnDailySummary"
-                    class="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition border border-gray-200">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
-                        </path>
-                    </svg>
-                    Daily Summary
-                </button>
-                <div class="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2">
-                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wide">Products:</span>
-                    <span id="totalItemsDisplay" class="text-sm font-bold text-brand-600 font-mono">-</span>
+            <div class="px-6 pb-4">
+                <div class="text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-2">
+                    Today’s Bills
                 </div>
-                <button onclick="app.requestImport()"
-                    class="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition border border-gray-200">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                    </svg>
-                    Import Checkpoint
-                </button>
-                <input type="file" id="fileImport" accept=".xlsx" class="hidden" />
-
-                <div class="h-8 w-px bg-gray-200 mx-2"></div>
-
-                <div id="runIdDisplay"
-                    class="text-sm font-mono font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Run ID: -
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Layout -->
-    <main class="flex-1 flex overflow-hidden">
-
-        <!-- Left Panel: Controls -->
-        <div class="w-[380px] bg-white border-r border-gray-200 flex flex-col z-10 shadow-soft relative">
-
-            <div class="p-6 flex-1 flex flex-col gap-6 overflow-y-auto">
-                <!-- Primary Actions -->
-                <button id="btnNewBill"
-                    class="group w-full bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white py-5 rounded-xl shadow-lg shadow-brand-500/30 transition-all duration-200 flex flex-col items-center justify-center gap-1 relative overflow-hidden">
-                    <div
-                        class="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                    </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 relative z-10" fill="none"
-                        viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span class="text-lg font-bold font-thai relative z-10">เปิดบิลใหม่ (New Bill)</span>
-                </button>
-
-                <!-- Search Input -->
-                <div class="relative group">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg class="h-5 w-5 text-gray-400 group-focus-within:text-brand-500 transition-colors"
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
-                    <input type="text" id="inputSearch"
-                        class="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:placeholder-gray-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm shadow-sm transition-all"
-                        placeholder="Search product (Code/Name)...">
-
-                    <!-- Search Results Dropdown -->
-                    <div id="searchResults"
-                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 max-h-64 overflow-y-auto z-50 divide-y divide-gray-50">
-                        <!-- Results injected here -->
-                    </div>
-                </div>
-
-                <!-- Input Zone -->
-                <div class="bg-gray-50 p-5 rounded-xl border border-gray-100 shadow-inner space-y-4">
-                    <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">Input Item</label>
-                        <span class="text-[10px] text-gray-400 bg-white px-2 py-0.5 rounded border">Alt+Q for Qty</span>
-                    </div>
-
-                    <div class="flex gap-3">
-                        <div class="w-20">
-                            <input type="number" id="inputQty" value="1" min="1"
-                                class="w-full h-12 text-center text-xl font-bold text-brand-700 bg-white border border-gray-200 rounded-lg focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all shadow-sm"
-                                tabindex="-1">
-                        </div>
-                        <div class="flex-1">
-                            <input type="text" id="inputBarcode"
-                                class="w-full h-12 px-4 text-lg font-medium text-gray-800 bg-white border border-gray-200 rounded-lg focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all shadow-sm disabled:bg-gray-100 disabled:text-gray-400"
-                                placeholder="Scan Barcode..." autofocus disabled>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tools -->
-                <!-- Tools -->
-                <div class="space-y-2">
-                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Coupons</p>
-                    <div class="grid grid-cols-3 gap-2">
-                        <button onclick="app.addCoupon('store')"
-                            class="py-3 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition flex flex-col items-center gap-1">
-                            <span class="text-lg">🏪</span> Store
-                        </button>
-                        <button onclick="app.addCoupon('vendor')"
-                            class="py-3 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-pink-50 hover:border-pink-200 hover:text-pink-600 transition flex flex-col items-center gap-1">
-                            <span class="text-lg">🏭</span> Vendor
-                        </button>
-                        <button onclick="app.addCoupon('mobile')"
-                            class="py-3 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-200 hover:text-green-600 transition flex flex-col items-center gap-1">
-                            <span class="text-lg">📱</span> Mobile
-                        </button>
-                    </div>
-                </div>
-
-                <div class="pt-4 border-t border-gray-100">
-                    <button id="btnSeed"
-                        class="w-full py-2 text-[10px] text-gray-400 hover:text-gray-600 border border-green-100 rounded hover:bg-green-50">Dev:
-                        Seed Data</button>
-                </div>
-
-            </div>
-
-            <!-- Footer Profile -->
-            <div class="p-4 border-t border-gray-100 bg-gray-50/50">
-                <div class="flex items-center gap-3">
-                    <div
-                        class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xs">
-                        A</div>
-                    <div class="text-xs">
-                        <div class="font-bold text-gray-700">Cashier Station 1</div>
-                        <div class="text-gray-400">Boots Thailand</div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Right Panel: Cart & Payment -->
-        <div class="flex-1 bg-gray-50/30 flex flex-col relative h-full">
-
-            <!-- Items Area -->
-            <div class="flex-1 flex flex-col overflow-hidden bg-white/50">
-                <!-- Header -->
                 <div
-                    class="grid grid-cols-[50px_1fr_100px_100px_100px_80px] gap-4 px-6 py-4 bg-white border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider sticky top-0 z-10">
-                    <div class="text-center">#</div>
-                    <div>Item Description</div>
-                    <div class="text-center">Qty</div>
-                    <div class="text-right">Price</div>
-                    <div class="text-right">Total</div>
-                    <div class="text-center">Void</div>
-                </div>
-
-                <!-- List -->
-                <div id="cartItemsList" class="flex-1 overflow-y-auto p-4 space-y-1">
-                    <div class="h-full flex flex-col items-center justify-center text-gray-300 gap-4">
-                        <svg class="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-                        </svg>
-                        <p class="font-medium">No items in cart</p>
+                    class="space-y-1 text-xs text-slate-500 rounded-2xl bg-white border border-slate-100 p-2 h-40 overflow-y-auto">
+                    <div class="px-3 py-2 rounded-xl bg-slate-50 text-slate-800 flex items-center justify-between">
+                        <span class="font-mono text-[11px]">BILL-0001</span>
+                        <span class="text-[10px] text-slate-400">12:30</span>
+                    </div>
+                    <div
+                        class="px-3 py-2 rounded-xl hover:bg-slate-50 cursor-pointer flex items-center justify-between">
+                        <span class="font-mono text-[11px]">BILL-0002</span>
+                        <span class="text-[10px] text-slate-400">13:10</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Summary & Pay Panel -->
+            <div class="mt-auto px-6 pb-6">
+                <button
+                    class="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white text-xs font-semibold py-3">
+                    <span>Add Bill</span>
+                    <span
+                        class="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center text-base leading-none">+</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <div class="flex-1 flex flex-col">
+
+            <!-- Top bar in main area -->
             <div
-                class="h-[280px] bg-white border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] flex flex-col z-20">
-                <div class="flex-1 flex">
-                    <!-- Totals Left -->
-                    <div class="flex-1 p-6 space-y-3">
-                        <div class="flex justify-between text-gray-600">
-                            <span class="font-medium">Subtotal</span>
-                            <span class="font-mono" id="summarySubtotal">0.00</span>
+                class="px-4 sm:px-8 pt-5 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div class="space-y-1">
+                    <p class="text-[10px] tracking-[0.2em] uppercase text-slate-400 font-semibold">
+                        Current Session
+                    </p>
+                    <p class="text-lg font-semibold tracking-tight text-slate-900">
+                        Boots POS — Grand5 Sukhumvit
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div id="connectionStatus"
+                        class="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        <span class="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-500">
+                            Online
+                        </span>
+                    </div>
+
+                    <div class="hidden sm:flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1">
+                        <span class="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-400">
+                            Products
+                        </span>
+                        <span id="totalItemsDisplay" class="text-xs font-mono font-semibold text-slate-800">
+                            -
+                        </span>
+                    </div>
+
+                    <button id="btnDailySummary"
+                        class="text-xs sm:text-[11px] font-medium text-slate-600 hover:text-slate-900 px-3 py-1 rounded-full hover:bg-slate-100 transition">
+                        Daily Summary
+                    </button>
+
+                    <button onclick="app.requestImport()"
+                        class="text-xs sm:text-[11px] font-medium text-slate-600 hover:text-slate-900 px-3 py-1 rounded-full hover:bg-slate-100 transition">
+                        Import
+                    </button>
+                    <input type="file" id="fileImport" accept=".xlsx" class="hidden" />
+
+                    <span id="runIdDisplay"
+                        class="text-[10px] font-mono font-semibold text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
+                        ID: -
+                    </span>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-6 px-4 sm:px-8 py-5">
+
+                <!-- Left controls column -->
+                <section class="flex flex-col gap-6">
+                    <!-- New bill block -->
+                    <button id="btnNewBill"
+                        class="w-full rounded-2xl bg-slate-900 text-white shadow-soft px-4 py-4 text-left hover:bg-black transition">
+                        <p class="text-[10px] tracking-[0.2em] uppercase text-slate-300 font-semibold">
+                            New bill
+                        </p>
+                        <p class="mt-1 text-base font-thai font-semibold">
+                            เปิดบิลใหม่
+                        </p>
+                        <p class="mt-1 text-[11px] text-slate-300">
+                            ระบบจะรีเซ็ตตะกร้าและเริ่มรายการขายใหม่
+                        </p>
+                    </button>
+
+                    <!-- Search -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
+                                Product Search
+                            </span>
                         </div>
-                        <div class="flex justify-between text-red-500">
-                            <span class="font-medium">Discount</span>
-                            <span class="font-mono" id="summaryDiscount">0.00</span>
-                        </div>
-                        <div class="h-px bg-gray-100 my-4"></div>
-                        <div class="flex justify-between items-end">
-                            <span class="text-lg font-bold text-gray-800">Total Due</span>
-                            <span class="text-5xl font-bold text-brand-700 tracking-tight"
-                                id="summaryNetTotal">0.00</span>
+                        <div class="relative">
+                            <input type="text" id="inputSearch" placeholder="ค้นหาชื่อสินค้า / รหัส"
+                                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
+                            <div
+                                class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                                </svg>
+                            </div>
+
+                            <!-- Search dropdown -->
+                            <div id="searchResults"
+                                class="hidden absolute left-0 right-0 top-full mt-2 rounded-2xl bg-white border border-slate-100 shadow-soft max-h-72 overflow-y-auto p-2 text-sm z-20">
+                                <!-- populated by JS -->
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Pay Right -->
-                    <div class="w-[300px] p-6 bg-gray-50 flex items-center border-l border-gray-100">
-                        <button id="btnPayCash"
-                            class="w-full h-full bg-gray-900 hover:bg-black text-white rounded-2xl shadow-xl flex flex-col items-center justify-center gap-2 group transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span
-                                class="text-3xl filter grayscale group-hover:grayscale-0 transition-all duration-300">💵</span>
-                            <div class="text-left">
-                                <div
-                                    class="text-sm text-gray-400 font-medium tracking-widest uppercase text-center group-hover:text-gray-300">
-                                    Pay Cash</div>
-                                <div class="text-xl font-bold">Process Payment</div>
+                    <!-- Scan area -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
+                                Scanner
+                            </span>
+                            <span class="text-[10px] text-slate-400 font-mono">
+                                Alt+Q → Qty
+                            </span>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <div class="w-24">
+                                <input type="number" id="inputQty" value="1" min="1" tabindex="-1"
+                                    class="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900" />
                             </div>
+                            <div class="flex-1">
+                                <input type="text" id="inputBarcode" placeholder="สแกนบาร์โค้ด / กรอกรหัสสินค้า"
+                                    disabled
+                                    class="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 px-4 text-sm sm:text-base font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-60" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coupons -->
+                    <div class="space-y-2">
+                        <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
+                            Discount Coupons
+                        </span>
+                        <div class="grid grid-cols-3 gap-3">
+                            <button onclick="app.addCoupon('store')"
+                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
+                                <span class="text-lg">🏪</span>
+                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
+                                    Store
+                                </span>
+                            </button>
+                            <button onclick="app.addCoupon('vendor')"
+                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
+                                <span class="text-lg">🏭</span>
+                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
+                                    Vendor
+                                </span>
+                            </button>
+                            <button onclick="app.addCoupon('mobile')"
+                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
+                                <span class="text-lg">📱</span>
+                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
+                                    App
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dev tools -->
+                    <div class="pt-4 border-t border-slate-100">
+                        <button id="btnSeed" class="text-[11px] text-slate-400 hover:text-slate-600 transition">
+                            Dev: Seed sample data
                         </button>
                     </div>
-                </div>
+                </section>
+
+                <!-- Right: cart & payment -->
+                <section class="flex flex-col rounded-3xl bg-slate-50/80 p-4 sm:p-5">
+                    <!-- Table header -->
+                    <div
+                        class="grid grid-cols-[56px,1.4fr,80px,100px,110px,70px] text-[10px] font-semibold text-slate-400 uppercase tracking-[0.18em] px-3 pb-2">
+                        <div class="text-center">No.</div>
+                        <div>Product</div>
+                        <div class="text-center">Qty</div>
+                        <div class="text-right">Price</div>
+                        <div class="text-right">Total</div>
+                        <div class="text-center">Action</div>
+                    </div>
+
+                    <!-- Items list -->
+                    <div id="cartItemsList"
+                        class="flex-1 bg-white rounded-2xl border border-slate-100 overflow-y-auto px-3 py-2 space-y-1">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-300 gap-3">
+                            <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                            <p class="text-xs font-medium">ยังไม่มีรายการสินค้า</p>
+                        </div>
+                    </div>
+
+                    <!-- Summary + Payment -->
+                    <div
+                        class="mt-4 bg-white rounded-2xl border border-slate-100 px-4 sm:px-6 py-4 flex flex-col gap-4">
+                        <div class="flex flex-col sm:flex-row gap-4 sm:items-end">
+                            <!-- Totals -->
+                            <div class="flex-1 space-y-2">
+                                <div class="flex justify-between text-xs sm:text-sm">
+                                    <span class="text-slate-500 font-medium">Subtotal</span>
+                                    <span id="summarySubtotal" class="font-mono font-semibold text-slate-900">
+                                        0.00
+                                    </span>
+                                </div>
+                                <div class="flex justify-between text-xs sm:text-sm">
+                                    <span class="text-slate-500 font-medium">Discount</span>
+                                    <span id="summaryDiscount" class="font-mono font-semibold text-rose-500">
+                                        0.00
+                                    </span>
+                                </div>
+                                <div
+                                    class="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-baseline">
+                                    <span class="text-base sm:text-lg font-semibold text-slate-900">
+                                        Total Due
+                                    </span>
+                                    <span id="summaryNetTotal"
+                                        class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+                                        0.00
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Pay buttons -->
+                            <div class="flex flex-col sm:flex-row gap-2 sm:w-64 justify-end">
+                                <button id="btnPayCash"
+                                    class="flex-1 h-12 sm:h-14 rounded-full bg-slate-900 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:bg-black transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span>Pay Cash</span>
+                                </button>
+                                <button id="btnPayCredit"
+                                    class="flex-1 h-12 sm:h-14 rounded-full bg-slate-100 text-slate-900 text-sm font-semibold border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span>Credit</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
-
         </div>
-    </main>
+    </div>
 
+    <!-- App script -->
     <script type="module" src="app.js"></script>
 </body>
 
