@@ -128,7 +128,21 @@ if (fileImportEl) {
 async function handleImportData(file) {
     if (!state.user) return Swal.fire("Error", "Wait for connection...", "error");
 
-    // Initial Loading State
+    // 1. Ask for Version / Note
+    const { value: versionNote } = await Swal.fire({
+        title: 'Import Versioning',
+        input: 'text',
+        inputLabel: 'Enter version label or note',
+        inputValue: `v${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        showCancelButton: true
+    });
+
+    if (!versionNote) {
+        if (fileImportEl) fileImportEl.value = '';
+        return; // Cancelled
+    }
+
+    // Initial Loading
     Swal.fire({
         title: 'Reading File...',
         text: 'Parsing Excel data',
@@ -142,16 +156,15 @@ async function handleImportData(file) {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        const batchSize = 400;
-        let batch = writeBatch(db);
-        let count = 0;
-        let total = 0;
-
         if (jsonData.length === 0) {
             return Swal.fire("Error", "Excel file appears empty", "warning");
         }
 
-        // Flexible Column Mapping
+        const totalRows = jsonData.length;
+        const BATCH_SIZE = 500; // Firestore limit per batch
+        const CONCURRENCY_LIMIT = 5; // Parallel requests
+
+        // Helper: Flexible Column Mapping
         const findKey = (row, ...candidates) => {
             const keys = Object.keys(row);
             for (const c of candidates) {
@@ -165,87 +178,124 @@ async function handleImportData(file) {
             console.log("Import Headers found:", Object.keys(jsonData[0]));
         }
 
-        const totalRows = jsonData.length;
+        // Prepare all operations in memory first (fast)
+        let operations = [];
+        let validCount = 0;
 
         for (const row of jsonData) {
             const pCode = String(findKey(row, 'Itemcode', 'Item Code', 'ProductCode', 'Code') || '').trim();
+            if (!pCode) continue;
+
             const name = findKey(row, 'Item Name', 'ItemName', 'Description', 'Name') || 'Unknown';
             const price = parseFloat(findKey(row, 'Price', 'Retail Price', 'Unit Price') || 0);
             const promo = findKey(row, 'Promotion', 'Promo', 'Tag') || null;
             const barcodeRaw = String(findKey(row, 'Barcodes', 'Barcode', 'EAN') || '');
 
-            if (!pCode) {
-                // console.warn("Skipping row missing Itemcode:", row);
-                continue;
-            }
+            operations.push({
+                type: 'product',
+                ref: doc(db, "products", pCode),
+                data: {
+                    productCode: pCode,
+                    desc: name,
+                    unitPrice: price,
+                    promoTag: promo,
+                    updatedAt: Timestamp.now(),
+                    importVersion: versionNote
+                }
+            });
 
-            // 1. Create/Update Product
-            const productRef = doc(db, "products", pCode);
-            batch.set(productRef, {
-                productCode: pCode,
-                desc: name,
-                unitPrice: price,
-                promoTag: promo,
-                updatedAt: Timestamp.now()
-            }, { merge: true });
-
-            // 2. Map Barcodes
             const barcodes = barcodeRaw.split(',').map(b => b.trim()).filter(b => b);
             for (const code of barcodes) {
-                if (code) {
-                    const barcodeRef = doc(db, "barcodes", code);
-                    batch.set(barcodeRef, {
+                operations.push({
+                    type: 'barcode',
+                    ref: doc(db, "barcodes", code),
+                    data: {
                         barcode: code,
-                        productCode: pCode
-                    });
-                }
-            }
-
-            count++;
-            total++;
-
-            // Update UI every 50 items or on batch commit
-            if (count >= batchSize) {
-                Swal.update({
-                    title: 'Importing Data...',
-                    html: `<b>${Math.round((total / totalRows) * 100)}%</b><br>Processed ${total} of ${totalRows} items`
-                });
-                await batch.commit();
-                batch = writeBatch(db);
-                count = 0;
-            } else if (total % 50 === 0) {
-                Swal.update({
-                    text: `Processed ${total} / ${totalRows} items`
+                        productCode: pCode,
+                        importVersion: versionNote
+                    }
                 });
             }
+            validCount++;
         }
 
-        if (count > 0) {
-            Swal.update({ text: 'Finalizing...' });
-            await batch.commit();
-        }
-
-        if (total === 0 && jsonData.length > 0) {
+        if (validCount === 0) {
             const headers = Object.keys(jsonData[0]).join(', ');
-            Swal.fire({
+            return Swal.fire({
                 icon: 'warning',
                 title: 'Import Mismatch',
-                text: `No items processed. Check your column headers.\nFound: [${headers}]\nExpected: Itemcode, Item Name, Price`
+                text: `No valid items found. Check headers.\nFound: [${headers}]`
             });
-            return;
         }
+
+        // Chunk operations into batches
+        const batches = [];
+        let currentBatch = writeBatch(db);
+        let batchOpCount = 0;
+
+        for (const op of operations) {
+            currentBatch.set(op.ref, op.data, { merge: true });
+            batchOpCount++;
+            if (batchOpCount >= BATCH_SIZE) {
+                batches.push(currentBatch);
+                currentBatch = writeBatch(db);
+                batchOpCount = 0;
+            }
+        }
+        if (batchOpCount > 0) batches.push(currentBatch);
+
+        // Execute batches with concurrency limit
+        let processedBatches = 0;
+        const totalBatches = batches.length;
+
+        Swal.update({
+            title: 'Uploading...',
+            html: `Prepared ${validCount} items into ${totalBatches} batches.<br>Starting parallel upload...`
+        });
+
+        // Simple concurrency queue
+        const results = [];
+        const executing = new Set();
+
+        for (const batch of batches) {
+            const p = batch.commit().then(() => {
+                executing.delete(p);
+                processedBatches++;
+                Swal.update({
+                    html: `<b>${Math.round((processedBatches / totalBatches) * 100)}%</b><br>Uploading batch ${processedBatches} of ${totalBatches}`
+                });
+            });
+            results.push(p);
+            executing.add(p);
+
+            if (executing.size >= CONCURRENCY_LIMIT) {
+                await Promise.race(executing);
+            }
+        }
+        await Promise.all(results);
+
+        // Record History
+        try {
+            await addDoc(collection(db, "system_imports"), {
+                version: versionNote,
+                timestamp: Timestamp.now(),
+                itemsCount: validCount,
+                totalRows: totalRows,
+                batches: totalBatches,
+                user: state.user.uid
+            });
+        } catch (e) { console.warn("Could not save import log", e); }
 
         Swal.fire({
             icon: 'success',
             title: 'Import Completed',
-            text: `Successfully processed ${total} items.`
+            text: `Successfully processed ${validCount} items (v: ${versionNote})`
         });
         updateTotalCount();
     } catch (e) {
         console.error(e);
         Swal.fire("Error", "Import failed: " + e.message, "error");
     } finally {
-        // setLoading(false); // Managed manually by Swal calls above
         if (fileImportEl) fileImportEl.value = '';
     }
 }
