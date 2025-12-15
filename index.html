@@ -4,365 +4,208 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Boots POS System</title>
+    <title>Boots POS</title>
 
-    <!-- Fonts: Outfit (EN) + Noto Sans Thai -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Google Fonts: Outfit + Noto Sans Thai -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet" />
+        rel="stylesheet">
 
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['"Outfit"', '"Noto Sans Thai"', "system-ui", "sans-serif"],
-                        thai: ['"Noto Sans Thai"', "system-ui", "sans-serif"],
-                    },
-                    colors: {
-                        brand: {
-                            50: "#eff6ff",
-                            100: "#dbeafe",
-                            500: "#3b82f6",
-                            600: "#2563eb",
-                        },
-                    },
-                    boxShadow: {
-                        soft: "0 18px 55px rgba(15,23,42,0.08)",
-                    },
-                },
-            },
-        };
+            theme: { extend: { fontFamily: { sans: ['"Outfit"', '"Noto Sans Thai"', 'ui-sans-serif', 'system-ui'] } } }
+        }
     </script>
 
-    <!-- SweetAlert2 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- SheetJS -->
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-
-    <style>
-        body {
-            font-family: "Outfit", "Noto Sans Thai", system-ui, -apple-system,
-                BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-
-        .font-thai {
-            font-family: "Noto Sans Thai", system-ui, sans-serif;
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #d4d4d8;
-            border-radius: 999px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a1a1aa;
-        }
-
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
 </head>
 
-<body class="min-h-screen bg-slate-100 flex items-center justify-center px-3 sm:px-6 py-4">
-
-    <!-- App Shell -->
-    <div class="max-w-6xl w-full bg-white rounded-[32px] shadow-soft border border-slate-100 overflow-hidden flex">
-
-        <!-- Sidebar -->
-        <aside class="hidden md:flex w-60 flex-col border-r border-slate-100 bg-slate-50/60">
-            <div class="px-6 pt-6 pb-4 flex items-center gap-3">
-                <div
-                    class="w-9 h-9 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-sm font-semibold">
-                    B
-                </div>
-                <div>
-                    <p class="text-xs font-semibold tracking-[0.18em] uppercase text-slate-400">
-                        Boots
-                    </p>
-                    <p class="text-sm font-thai font-semibold text-slate-900">
-                        POS Station
-                    </p>
-                </div>
-            </div>
-
-            <div class="px-6 pb-4">
-                <div class="text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-2">
-                    Today’s Bills
-                </div>
-                <div
-                    class="space-y-1 text-xs text-slate-500 rounded-2xl bg-white border border-slate-100 p-2 h-40 overflow-y-auto">
-                    <div class="px-3 py-2 rounded-xl bg-slate-50 text-slate-800 flex items-center justify-between">
-                        <span class="font-mono text-[11px]">BILL-0001</span>
-                        <span class="text-[10px] text-slate-400">12:30</span>
-                    </div>
+<body class="min-h-screen font-sans">
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-40">
+        <div class="mx-auto max-w-[1400px] px-4 pt-4">
+            <div class="glass rounded-[28px] px-5 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
                     <div
-                        class="px-3 py-2 rounded-xl hover:bg-slate-50 cursor-pointer flex items-center justify-between">
-                        <span class="font-mono text-[11px]">BILL-0002</span>
-                        <span class="text-[10px] text-slate-400">13:10</span>
+                        class="h-11 w-11 rounded-2xl bg-black/90 text-white flex items-center justify-center font-bold text-xl shadow">
+                        B
                     </div>
-                </div>
-            </div>
-
-            <div class="mt-auto px-6 pb-6">
-                <button
-                    class="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white text-xs font-semibold py-3">
-                    <span>Add Bill</span>
-                    <span
-                        class="w-5 h-5 rounded-full bg-white/15 flex items-center justify-center text-base leading-none">+</span>
-                </button>
-            </div>
-        </aside>
-
-        <!-- Main -->
-        <div class="flex-1 flex flex-col">
-
-            <!-- Top bar in main area -->
-            <div
-                class="px-4 sm:px-8 pt-5 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                <div class="space-y-1">
-                    <p class="text-[10px] tracking-[0.2em] uppercase text-slate-400 font-semibold">
-                        Current Session
-                    </p>
-                    <p class="text-lg font-semibold tracking-tight text-slate-900">
-                        Boots POS — Grand5 Sukhumvit
-                    </p>
+                    <div class="leading-tight">
+                        <div class="text-base font-bold tracking-tight">Boots POS</div>
+                        <div class="flex items-center gap-2">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                            <span id="connectionStatus" class="text-[11px] font-semibold uppercase tracking-widest"
+                                style="color: var(--muted);">Ready</span>
+                            <span class="text-[11px]" style="color: var(--muted);">•</span>
+                            <span class="text-[11px] font-mono" style="color: var(--muted);" id="runIdDisplay">BILL:
+                                -</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <div id="connectionStatus"
-                        class="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                        <span class="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-500">
-                            Online
-                        </span>
+                    <div class="hidden sm:flex items-center gap-3 rounded-2xl px-4 py-2 ui-pill">
+                        <div class="text-[10px] font-bold uppercase tracking-widest" style="color: var(--muted);">
+                            Products</div>
+                        <div id="totalItemsDisplay" class="font-mono font-bold">-</div>
                     </div>
 
-                    <div class="hidden sm:flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1">
-                        <span class="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-400">
-                            Products
-                        </span>
-                        <span id="totalItemsDisplay" class="text-xs font-mono font-semibold text-slate-800">
-                            -
-                        </span>
-                    </div>
-
-                    <button id="btnDailySummary"
-                        class="text-xs sm:text-[11px] font-medium text-slate-600 hover:text-slate-900 px-3 py-1 rounded-full hover:bg-slate-100 transition">
+                    <button id="btnDailySummary" class="ui-pill text-sm font-semibold transition hover:opacity-90">
                         Daily Summary
                     </button>
 
-                    <button onclick="app.requestImport()"
-                        class="text-xs sm:text-[11px] font-medium text-slate-600 hover:text-slate-900 px-3 py-1 rounded-full hover:bg-slate-100 transition">
-                        Import
+                    <button id="btnTheme" class="ui-pill text-sm font-semibold transition hover:opacity-90">
+                        Toggle Theme
                     </button>
-                    <input type="file" id="fileImport" accept=".xlsx" class="hidden" />
-
-                    <span id="runIdDisplay"
-                        class="text-[10px] font-mono font-semibold text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
-                        ID: -
-                    </span>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <!-- Content -->
-            <div class="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-6 px-4 sm:px-8 py-5">
+    <!-- Layout -->
+    <main class="mx-auto max-w-[1400px] px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
 
-                <!-- Left controls column -->
-                <section class="flex flex-col gap-6">
-                    <!-- New bill block -->
-                    <button id="btnNewBill"
-                        class="w-full rounded-2xl bg-slate-900 text-white shadow-soft px-4 py-4 text-left hover:bg-black transition">
-                        <p class="text-[10px] tracking-[0.2em] uppercase text-slate-300 font-semibold">
-                            New bill
-                        </p>
-                        <p class="mt-1 text-base font-thai font-semibold">
-                            เปิดบิลใหม่
-                        </p>
-                        <p class="mt-1 text-[11px] text-slate-300">
-                            ระบบจะรีเซ็ตตะกร้าและเริ่มรายการขายใหม่
-                        </p>
+            <!-- Left -->
+            <aside class="space-y-6">
+                <section class="card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-sm font-bold tracking-tight">New Transaction</div>
+                            <div class="text-xs" style="color: var(--muted);">iOS-like clean theme (light/dark)</div>
+                        </div>
+                    </div>
+
+                    <button id="btnNewBill" class="btn-primary w-full">
+                        เปิดบิลใหม่ (New Bill)
                     </button>
 
-                    <!-- Search -->
-                    <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
-                                Product Search
-                            </span>
+                    <div class="mt-5 grid grid-cols-[96px_1fr] gap-3">
+                        <div>
+                            <label class="text-[11px] font-bold uppercase tracking-widest"
+                                style="color: var(--muted);">Qty</label>
+                            <input id="inputQty" type="number" min="1" value="1"
+                                class="ui-input mt-2 text-center text-xl font-bold" />
                         </div>
-                        <div class="relative">
-                            <input type="text" id="inputSearch" placeholder="ค้นหาชื่อสินค้า / รหัส"
-                                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
-                            <div
-                                class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
-                                </svg>
-                            </div>
 
-                            <!-- Search dropdown -->
-                            <div id="searchResults"
-                                class="hidden absolute left-0 right-0 top-full mt-2 rounded-2xl bg-white border border-slate-100 shadow-soft max-h-72 overflow-y-auto p-2 text-sm z-20">
-                                <!-- populated by JS -->
+                        <div>
+                            <label class="text-[11px] font-bold uppercase tracking-widest"
+                                style="color: var(--muted);">Scan / Code</label>
+                            <input id="inputBarcode" type="text" placeholder="Scan item..."
+                                class="ui-input mt-2 font-semibold" disabled />
+                            <div class="mt-2 text-[11px]" style="color: var(--muted);">Enter เพื่อเพิ่มรายการ (เดโมธีม)
                             </div>
                         </div>
                     </div>
+                </section>
 
-                    <!-- Scan area -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
-                                Scanner
-                            </span>
-                            <span class="text-[10px] text-slate-400 font-mono">
-                                Alt+Q → Qty
-                            </span>
-                        </div>
-
-                        <div class="flex gap-3">
-                            <div class="w-24">
-                                <input type="number" id="inputQty" value="1" min="1" tabindex="-1"
-                                    class="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900" />
-                            </div>
-                            <div class="flex-1">
-                                <input type="text" id="inputBarcode" placeholder="สแกนบาร์โค้ด / กรอกรหัสสินค้า"
-                                    disabled
-                                    class="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 px-4 text-sm sm:text-base font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-60" />
-                            </div>
+                <section class="card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-bold tracking-tight">Search</div>
+                            <div class="text-xs" style="color: var(--muted);">พิมพ์แล้วโชว์ 5 ผลลัพธ์ด้านล่าง</div>
                         </div>
                     </div>
 
-                    <!-- Coupons -->
-                    <div class="space-y-2">
-                        <span class="text-[10px] tracking-[0.18em] uppercase text-slate-400 font-semibold">
-                            Discount Coupons
-                        </span>
-                        <div class="grid grid-cols-3 gap-3">
-                            <button onclick="app.addCoupon('store')"
-                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
-                                <span class="text-lg">🏪</span>
-                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
-                                    Store
-                                </span>
-                            </button>
-                            <button onclick="app.addCoupon('vendor')"
-                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
-                                <span class="text-lg">🏭</span>
-                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
-                                    Vendor
-                                </span>
-                            </button>
-                            <button onclick="app.addCoupon('mobile')"
-                                class="h-16 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition flex flex-col items-center justify-center gap-1">
-                                <span class="text-lg">📱</span>
-                                <span class="text-[10px] font-semibold tracking-[0.16em] uppercase text-slate-500">
-                                    App
-                                </span>
-                            </button>
+                    <div class="mt-4 relative">
+                        <input id="inputSearch" type="text" placeholder="Search product..."
+                            class="ui-input font-semibold" />
+                        <div id="searchResults" class="hidden absolute left-0 right-0 mt-2 ui-dropdown"></div>
+                    </div>
+                </section>
+
+                <section class="card p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-bold tracking-tight">Actions</div>
+                            <div class="text-xs" style="color: var(--muted);">ตัวอย่าง Action Sheet ธีมเดียวกัน</div>
                         </div>
                     </div>
 
-                    <!-- Dev tools -->
-                    <div class="pt-4 border-t border-slate-100">
-                        <button id="btnSeed" class="text-[11px] text-slate-400 hover:text-slate-600 transition">
-                            Dev: Seed sample data
+                    <div class="mt-4 grid grid-cols-2 gap-3">
+                        <button id="btnOpenSheet" class="ui-pill h-12 font-semibold">Open Action Sheet</button>
+                        <button id="btnUpload" class="ui-pill h-12 font-semibold">Upload (Theme)</button>
+                        <input type="file" id="fileImport" class="hidden" accept=".xlsx,.csv" />
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Right -->
+            <section class="card overflow-hidden">
+                <div class="px-6 py-5 border-b" style="border-color: var(--border);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-bold tracking-tight">Cart</div>
+                            <div class="text-xs" style="color: var(--muted);">รายการสินค้าในบิล</div>
+                        </div>
+                        <div class="text-xs font-mono" style="color: var(--muted);" id="modeLabel">Mode: iOS Clean</div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-3 text-[11px] font-bold uppercase tracking-widest grid grid-cols-[56px_96px_1fr_80px_96px_96px_64px] gap-4"
+                    style="color: var(--muted); background: rgba(148,163,184,.08);">
+                    <div class="text-center">No</div>
+                    <div class="text-center">Code</div>
+                    <div>Product</div>
+                    <div class="text-center">Qty</div>
+                    <div class="text-right">Price</div>
+                    <div class="text-right">Total</div>
+                    <div class="text-center">Action</div>
+                </div>
+
+                <div id="cartItemsList" class="h-[420px] overflow-y-auto"></div>
+
+                <div class="px-6 py-6 border-t" style="border-color: var(--border);">
+                    <div class="grid sm:grid-cols-[1fr_320px] gap-6 items-end">
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span style="color: var(--muted);" class="font-medium">Subtotal</span>
+                                <span id="summarySubtotal" class="font-mono font-semibold">0.00</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span style="color: var(--muted);" class="font-medium">Discount</span>
+                                <span id="summaryDiscount" class="font-mono font-semibold"
+                                    style="color: var(--danger);">0.00</span>
+                            </div>
+                            <div class="pt-4 mt-4 border-t border-dashed flex justify-between items-baseline"
+                                style="border-color: var(--border);">
+                                <span class="text-xl font-bold tracking-tight">Total Due</span>
+                                <span id="summaryNetTotal" class="text-5xl font-bold tracking-tighter">0.00</span>
+                            </div>
+                        </div>
+
+                        <button id="btnPayCash" class="btn-primary h-[92px] text-lg" disabled>
+                            Pay Cash
                         </button>
                     </div>
-                </section>
+                </div>
+            </section>
+        </div>
+    </main>
 
-                <!-- Right: cart & payment -->
-                <section class="flex flex-col rounded-3xl bg-slate-50/80 p-4 sm:p-5">
-                    <!-- Table header -->
-                    <div
-                        class="grid grid-cols-[56px,1.4fr,80px,100px,110px,70px] text-[10px] font-semibold text-slate-400 uppercase tracking-[0.18em] px-3 pb-2">
-                        <div class="text-center">No.</div>
-                        <div>Product</div>
-                        <div class="text-center">Qty</div>
-                        <div class="text-right">Price</div>
-                        <div class="text-right">Total</div>
-                        <div class="text-center">Action</div>
-                    </div>
+    <!-- iOS Action Sheet -->
+    <div id="iosBackdrop" class="ios-backdrop"></div>
+    <div id="iosSheetWrap" class="ios-sheet-wrap">
+        <div class="ios-sheet">
+            <div class="ios-sheet-card">
+                <div class="ios-sheet-header">
+                    <div id="iosSheetTitle" class="ios-sheet-title">A Short Title is Best</div>
+                    <div id="iosSheetMsg" class="ios-sheet-msg">A message should be a short, complete sentence.</div>
+                </div>
+                <div id="iosSheetActions"></div>
+            </div>
 
-                    <!-- Items list -->
-                    <div id="cartItemsList"
-                        class="flex-1 bg-white rounded-2xl border border-slate-100 overflow-y-auto px-3 py-2 space-y-1">
-                        <div class="h-full flex flex-col items-center justify-center text-slate-300 gap-3">
-                            <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                            </svg>
-                            <p class="text-xs font-medium">ยังไม่มีรายการสินค้า</p>
-                        </div>
-                    </div>
-
-                    <!-- Summary + Payment -->
-                    <div
-                        class="mt-4 bg-white rounded-2xl border border-slate-100 px-4 sm:px-6 py-4 flex flex-col gap-4">
-                        <div class="flex flex-col sm:flex-row gap-4 sm:items-end">
-                            <!-- Totals -->
-                            <div class="flex-1 space-y-2">
-                                <div class="flex justify-between text-xs sm:text-sm">
-                                    <span class="text-slate-500 font-medium">Subtotal</span>
-                                    <span id="summarySubtotal" class="font-mono font-semibold text-slate-900">
-                                        0.00
-                                    </span>
-                                </div>
-                                <div class="flex justify-between text-xs sm:text-sm">
-                                    <span class="text-slate-500 font-medium">Discount</span>
-                                    <span id="summaryDiscount" class="font-mono font-semibold text-rose-500">
-                                        0.00
-                                    </span>
-                                </div>
-                                <div
-                                    class="pt-3 mt-2 border-t border-dashed border-slate-200 flex justify-between items-baseline">
-                                    <span class="text-base sm:text-lg font-semibold text-slate-900">
-                                        Total Due
-                                    </span>
-                                    <span id="summaryNetTotal"
-                                        class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
-                                        0.00
-                                    </span>
-                                </div>
-                            </div>
-
-                            <!-- Pay buttons -->
-                            <div class="flex flex-col sm:flex-row gap-2 sm:w-64 justify-end">
-                                <button id="btnPayCash"
-                                    class="flex-1 h-12 sm:h-14 rounded-full bg-slate-900 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:bg-black transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span>Pay Cash</span>
-                                </button>
-                                <button id="btnPayCredit"
-                                    class="flex-1 h-12 sm:h-14 rounded-full bg-slate-100 text-slate-900 text-sm font-semibold border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span>Credit</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+            <div class="ios-sheet-cancel">
+                <button class="ios-sheet-btn cancel" id="iosSheetCancel">Cancel</button>
             </div>
         </div>
     </div>
 
-    <!-- App script -->
-    <script type="module" src="app.js"></script>
+    <script type="module" src="./js/main.js"></script>
 </body>
 
 </html>
