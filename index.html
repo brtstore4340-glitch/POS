@@ -58,6 +58,10 @@
                         Daily Summary
                     </button>
 
+                    <button id="btnUploadModal" class="ui-pill text-sm font-semibold transition hover:opacity-90">
+                        Upload Products
+                    </button>
+
                     <button id="btnTheme" class="ui-pill text-sm font-semibold transition hover:opacity-90">
                         Toggle Theme
                     </button>
@@ -67,7 +71,7 @@
     </header>
 
     <!-- Layout -->
-    <main class="mx-auto max-w-[1400px] px-4 py-6">
+    <main class="mx-auto max-w-[1400px] px-4 py-6 space-y-6">
         <div class="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
 
             <!-- Left -->
@@ -128,8 +132,7 @@
 
                     <div class="mt-4 grid grid-cols-2 gap-3">
                         <button id="btnOpenSheet" class="ui-pill h-12 font-semibold">Open Action Sheet</button>
-                        <button id="btnUpload" class="ui-pill h-12 font-semibold">Upload (Theme)</button>
-                        <input type="file" id="fileImport" class="hidden" accept=".xlsx,.csv" />
+                        <button id="btnUpload" class="ui-pill h-12 font-semibold">Upload CSV</button>
                     </div>
                 </section>
             </aside>
@@ -186,6 +189,65 @@
             </section>
         </div>
     </main>
+
+    <!-- Upload Modal -->
+    <div id="uploadOverlay" class="upload-overlay hidden">
+        <div class="upload-modal card">
+            <div class="flex items-start justify-between gap-3 pb-4 border-b" style="border-color: var(--border);">
+                <div>
+                    <div class="text-sm font-bold tracking-tight">Upload Product CSV</div>
+                    <div class="text-xs" style="color: var(--muted);">Clean, modern, fast lane สำหรับไฟล์ 26 คอลัมน์</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="upload-pill">Secure Upload</span>
+                    <span class="upload-pill">Firebase Ready</span>
+                    <button id="btnUploadClose" class="ui-pill text-sm font-semibold">Close</button>
+                </div>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] mt-5">
+                <div id="uploadDropZone" class="upload-drop">
+                    <div>
+                        <div class="text-lg font-semibold">ลากไฟล์ .csv มาวางที่นี่</div>
+                        <div class="text-sm mt-1" style="color: var(--muted);">รองรับ UTF-8, 26 columns, จำกัดขนาด 20MB</div>
+                    </div>
+                    <div class="flex flex-wrap gap-3 mt-6">
+                        <button id="btnUploadBrowse" class="btn-primary h-12 px-6 text-sm">เลือกไฟล์</button>
+                        <div class="upload-meta">
+                            <div class="text-[11px] uppercase font-bold tracking-widest" style="color: var(--muted);">ชื่อไฟล์</div>
+                            <div id="uploadFileName" class="font-semibold">ยังไม่เลือกไฟล์</div>
+                            <div id="uploadFileSize" class="text-xs" style="color: var(--muted);">-</div>
+                        </div>
+                    </div>
+                    <input type="file" id="productCsvInput" accept=".csv" class="hidden" />
+                </div>
+
+                <div class="space-y-4">
+                    <div class="upload-status">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div>
+                                <div id="uploadStatusText" class="text-sm font-bold">Ready to upload</div>
+                                <div id="uploadStatusNote" class="text-xs" style="color: var(--muted);">รองรับไฟล์ .csv</div>
+                            </div>
+                            <div class="text-xs font-mono" style="color: var(--muted);">Rows: <span id="uploadRows">กำลังประเมิน...</span></div>
+                        </div>
+                        <div class="upload-progress">
+                            <div class="upload-progress-inner" id="uploadProgressBar" style="width: 0%;"></div>
+                        </div>
+                        <pre id="uploadPreview" class="upload-preview">// preview จะโชว์ที่นี่หลังเลือกไฟล์</pre>
+                        <div id="uploadErrors" class="hidden"></div>
+                    </div>
+
+                    <div class="upload-columns" id="uploadColumns"></div>
+
+                    <div class="upload-footer">
+                        <div class="text-xs font-semibold">Firebase ready</div>
+                        <div id="uploadFirebaseHint" class="text-[11px]" style="color: var(--muted);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- iOS Action Sheet -->
     <div id="iosBackdrop" class="ios-backdrop"></div>

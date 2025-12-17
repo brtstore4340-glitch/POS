@@ -122,6 +122,172 @@ html.dark .card {
     cursor: not-allowed;
 }
 
+/* Upload UI */
+.upload-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .05);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+html.dark .upload-pill {
+    background: rgba(148, 163, 184, .08);
+}
+
+.upload-drop {
+    border: 1px dashed var(--border);
+    border-radius: 20px;
+    padding: 22px;
+    background: linear-gradient(135deg, rgba(10, 132, 255, .08), rgba(15, 23, 42, .02));
+    box-shadow: var(--shadowSoft);
+    cursor: pointer;
+    transition: border-color .2s ease, transform .08s ease;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.upload-drop.dragging {
+    border-color: var(--blue);
+    transform: translateY(-1px);
+}
+
+.upload-meta {
+    padding: 10px 12px;
+    background: var(--panelSolid);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadowSoft);
+}
+
+.upload-status {
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 16px;
+    background: var(--panelSolid);
+    box-shadow: var(--shadowSoft);
+}
+
+.upload-progress {
+    width: 100%;
+    height: 10px;
+    background: rgba(148, 163, 184, .25);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.upload-progress-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #0a84ff, #10b981);
+    border-radius: 999px;
+    width: 0%;
+    transition: width .15s ease;
+}
+
+.upload-preview {
+    background: #0b1020;
+    color: #e2e8f0;
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 12px;
+    max-height: 180px;
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, .25);
+}
+
+html.dark .upload-preview {
+    background: rgba(15, 23, 42, .8);
+}
+
+.upload-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+}
+
+.upload-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--panelSolid);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadowSoft);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.upload-chip em {
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.upload-chip.required {
+    border-color: rgba(10, 132, 255, .35);
+}
+
+.upload-error {
+    padding: 10px 12px;
+    background: rgba(255, 59, 48, .08);
+    border: 1px solid rgba(255, 59, 48, .35);
+    color: #b91c1c;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+html.dark .upload-error {
+    background: rgba(255, 107, 99, .08);
+    color: #fecdd3;
+}
+
+.upload-footer {
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: var(--panelSolid);
+}
+
+.upload-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(15, 23, 42, .35);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 90;
+}
+
+.upload-overlay.hidden {
+    display: none;
+}
+
+.upload-modal {
+    width: min(1180px, 100%);
+    max-height: 90vh;
+    overflow: auto;
+    border-radius: 24px;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
 /* iOS Action Sheet */
 .ios-backdrop {
     position: fixed;

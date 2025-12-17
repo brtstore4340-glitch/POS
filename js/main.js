@@ -4,6 +4,7 @@ import { openActionSheet } from "./ui/actionsheet.js";
 import { toast } from "./ui/toast.js";
 import { renderCart, setEmptyCart } from "./ui/cartView.js";
 import { initSearch } from "./ui/searchView.js";
+import { initUploadModule } from "./ui/uploadView.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -115,12 +116,48 @@ $("btnOpenSheet")?.addEventListener("click", () => {
 });
 
 // Upload (theme)
-$("btnUpload")?.addEventListener("click", () => $("fileImport")?.click());
-$("fileImport")?.addEventListener("change", (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    toast(`Selected: ${f.name}`);
-    e.target.value = "";
+$("btnUpload")?.addEventListener("click", openUploadOverlay);
+$("btnUploadModal")?.addEventListener("click", openUploadOverlay);
+$("btnUploadClose")?.addEventListener("click", closeUploadOverlay);
+
+function openUploadOverlay() {
+    const overlay = $("uploadOverlay");
+    if (!overlay) return;
+    overlay.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+}
+
+function closeUploadOverlay() {
+    const overlay = $("uploadOverlay");
+    if (!overlay) return;
+    overlay.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+}
+
+const overlayEl = $("uploadOverlay");
+if (overlayEl) {
+    overlayEl.addEventListener("click", (e) => {
+        if (e.target === overlayEl) closeUploadOverlay();
+    });
+}
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeUploadOverlay();
+});
+
+initUploadModule({
+    dropZone: $("uploadDropZone"),
+    browseBtn: $("btnUploadBrowse"),
+    fileInput: $("productCsvInput"),
+    progressEl: $("uploadProgressBar"),
+    statusEl: $("uploadStatusText"),
+    statusNoteEl: $("uploadStatusNote"),
+    fileNameEl: $("uploadFileName"),
+    fileSizeEl: $("uploadFileSize"),
+    rowsEl: $("uploadRows"),
+    previewEl: $("uploadPreview"),
+    errorsEl: $("uploadErrors"),
+    columnsEl: $("uploadColumns"),
+    firebaseHintEl: $("uploadFirebaseHint"),
 });
 
 // Search module
