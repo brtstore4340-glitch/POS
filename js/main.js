@@ -1,195 +1,243 @@
+import { store } from "./core/state.js";
 import { initTheme, toggleTheme } from "./ui/theme.js";
 import { openActionSheet } from "./ui/actionsheet.js";
 import { toast } from "./ui/toast.js";
+import { renderCart, setEmptyCart } from "./ui/cartView.js";
 import { initSearch } from "./ui/searchView.js";
-import { fetchItemExport } from "./data/sheets.js";
-import { renderDailyReport } from "./ui/dailyReport.js";
+
+import { auth, fb } from "./data/firebase.js";
+import { importMasterFile, getMasterMeta } from "./features/importMaster.js";
 
 const $ = (id) => document.getElementById(id);
 
-// Init theme
+// -------------------- Theme + Icon --------------------
 initTheme();
+renderThemeIcon();
 
-// State
-let sheetItems = [];
-let sheetLoaded = false;
-
-const demoBills = [
-  {
-    code: "BILL-001",
-    date: "2025-12-16 18:45",
-    paid: 1500,
-    total: 1438,
-    change: 62,
-    items: [
-      { code: "8850001001", name: "Boots Vitamin C Brightening Serum 30ml", qty: 1, unitPrice: 599, promotion: "-", dealPrice: 599, sumPrice: 599 },
-      { code: "8850002002", name: "No7 Protect & Perfect Intense ADV Night Cream 50ml", qty: 2, unitPrice: 420, promotion: "Buy 2 Save 10%", dealPrice: 378, sumPrice: 756 },
-      { code: "8850003003", name: "Eucerin pH5 Shower Oil 400ml", qty: 1, unitPrice: 83, promotion: "-", dealPrice: 83, sumPrice: 83 },
-    ],
-  },
-  {
-    code: "BILL-002",
-    date: "2025-12-16 19:05",
-    paid: 980,
-    total: 920,
-    change: 60,
-    items: [
-      { code: "8850004004", name: "CeraVe Hydrating Cleanser 473ml", qty: 1, unitPrice: 520, promotion: "-", dealPrice: 520, sumPrice: 520 },
-      { code: "8850005005", name: "Accu-Check Guide Test Strips 50s", qty: 1, unitPrice: 400, promotion: "Member", dealPrice: 400, sumPrice: 400 },
-    ],
-  },
-];
-
-// Daily report render
-renderDailyReport(
-  {
-    container: $("billList"),
-    summaryEl: $("summaryBillCount"),
-    totalEl: $("summaryBillAmount"),
-  },
-  demoBills
-);
-
-// Theme toggle
-$("btnTheme")?.addEventListener("click", () => toggleTheme());
-
-// New bill prep: focus scan box
-$("btnNewBill")?.addEventListener("click", () => {
-  $("runIdDisplay").textContent = "BILL: NEW";
-  $("connectionStatus").textContent = sheetLoaded ? "READY" : "LOADING SHEET";
-  $("inputBarcode").focus();
+$("btnTheme")?.addEventListener("click", () => {
+    toggleTheme();
+    renderThemeIcon();
 });
 
-// Daily summary button scrolls into view
-$("btnDailySummary")?.addEventListener("click", () => {
-  const report = $("dailyReport");
-  if (report) report.scrollIntoView({ behavior: "smooth", block: "start" });
-});
+function renderThemeIcon() {
+    const isDark = document.documentElement.classList.contains("dark");
+    const iconWrap = $("themeIcon");
+    if (!iconWrap) return;
 
-// Action sheet sample
-$("btnOpenSheet")?.addEventListener("click", () => {
-  openActionSheet({
-    title: "Master Data",
-    message: "เลือกรายการ",
-    actions: [
-      { text: "ดูสถานะ Google Sheet", onClick: () => toast(sheetLoaded ? "พร้อมใช้งาน" : "ยังไม่โหลด") },
-      { text: "ปิด", onClick: () => null },
-    ],
-  });
-});
+    iconWrap.innerHTML = isDark
+        ? `<!-- sun -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"></path>
+        <path d="M12 2v2"></path><path d="M12 20v2"></path>
+        <path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path>
+        <path d="M2 12h2"></path><path d="M20 12h2"></path>
+        <path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path>
+      </svg>`
+        : `<!-- moon -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+      </svg>`;
+}
 
-// Upload Master (existing button) still triggers hidden file input if provided
-$("btnUpload")?.addEventListener("click", () => $("fileImport")?.click());
-$("fileImport")?.addEventListener("change", (e) => {
-  const f = e.target.files?.[0];
-  if (f) toast(`เลือกไฟล์: ${f.name}`);
-  e.target.value = "";
-});
+// -------------------- Initial UI --------------------
+setEmptyCart($("cartItemsList"));
 
-// Search box (demo/local)
+// Search demo dataset (ชั่วคราว—ต่อไปค่อยต่อ DB)
 const mockProducts = [
-  { code: "1000001", name: "Boots Vitamin C", price: 299 },
-  { code: "1000002", name: "No.7 Serum", price: 1290 },
-  { code: "1000003", name: "Cerave Cleanser", price: 599 },
-  { code: "1000004", name: "Eucerin Lotion", price: 799 },
-  { code: "1000005", name: "Accu-Check Strips", price: 1450 },
-  { code: "1000006", name: "Omron BP Monitor", price: 2490 },
+    { code: "1000001", name: "Boots Vitamin C", price: 299 },
+    { code: "1000002", name: "No.7 Serum", price: 1290 },
+    { code: "1000003", name: "Cerave Cleanser", price: 599 },
+    { code: "1000004", name: "Eucerin Lotion", price: 799 },
+    { code: "1000005", name: "Accu-Check Strips", price: 1450 },
+    { code: "1000006", name: "Omron BP Monitor", price: 2490 },
 ];
 
 initSearch({
-  inputEl: $("inputSearch"),
-  resultsEl: $("searchResults"),
-  items: mockProducts,
-  onPick: (product) => {
-    $("inputBarcode").value = product.code;
-    $("inputBarcode").focus();
-  },
-});
-
-// Google Sheet dynamic search for Scan / Code
-const scanInput = $("inputBarcode");
-const scanResults = $("scanResults");
-
-const debounce = (fn, ms) => {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
-  };
-};
-
-const filterSheet = (term) => {
-  if (!sheetItems.length) return [];
-  const lower = term.toLowerCase();
-  return sheetItems
-    .filter((p) => (p.name || "").toLowerCase().includes(lower))
-    .slice(0, 8);
-};
-
-const renderScanResults = (items) => {
-  if (!scanResults) return;
-  if (!items.length) {
-    scanResults.classList.add("hidden");
-    scanResults.innerHTML = "";
-    return;
-  }
-  scanResults.innerHTML = items
-    .map(
-      (it) => `
-    <div class="scan-row" data-code="${it.code}">
-      <div class="scan-code">${it.code || "-"}</div>
-      <div>
-        <div class="scan-name">${it.name || "-"}</div>
-        <div class="scan-price">฿${(it.dealPrice || it.unitPrice || 0).toFixed(2)}</div>
-      </div>
-    </div>
-  `
-    )
-    .join("");
-  scanResults.classList.remove("hidden");
-
-  scanResults.querySelectorAll("[data-code]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const code = el.getAttribute("data-code");
-      scanInput.value = code || "";
-      scanResults.classList.add("hidden");
-    });
-  });
-};
-
-scanInput?.addEventListener(
-  "input",
-  debounce((e) => {
-    const term = (e.target.value || "").trim();
-    if (term.length < 2) {
-      renderScanResults([]);
-      return;
+    inputEl: $("inputSearch"),
+    resultsEl: $("searchResults"),
+    items: mockProducts,
+    onPick: (product) => {
+        if (!store.state.billOpen) return toast("กรุณาเปิดบิลใหม่ก่อน");
+        $("inputBarcode").disabled = false;
+        $("inputBarcode").value = product.code;
+        $("inputBarcode").focus();
     }
-    const results = filterSheet(term);
-    renderScanResults(results);
-  }, 180)
-);
-
-document.addEventListener("click", (e) => {
-  if (scanResults && !scanResults.contains(e.target) && !scanInput.contains(e.target)) {
-    scanResults.classList.add("hidden");
-  }
 });
 
-// Sheet load
-async function initSheet() {
-  $("connectionStatus").textContent = "LOADING SHEET";
-  try {
-    sheetItems = await fetchItemExport();
-    sheetLoaded = true;
-    $("connectionStatus").textContent = "SHEET READY";
-    $("dbUpdateDisplay").textContent = new Date().toLocaleString("th-TH");
-    toast("โหลด Google Sheet สำเร็จ");
-  } catch (err) {
-    console.error(err);
-    $("connectionStatus").textContent = "SHEET ERROR";
-    toast("โหลด Google Sheet ไม่สำเร็จ");
-  }
+// -------------------- Auth (Anon) + DB meta --------------------
+fb.onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        $("connectionStatus").textContent = "READY";
+        await refreshMasterMeta();
+    } else {
+        $("connectionStatus").textContent = "CONNECTING";
+        fb.signInAnonymously(auth).catch(() => {
+            $("connectionStatus").textContent = "OFFLINE";
+        });
+    }
+});
+
+async function refreshMasterMeta() {
+    try {
+        const meta = await getMasterMeta();
+        const el = $("dbUpdateDisplay");
+        if (!el) return;
+
+        if (!meta?.lastUploadAt) {
+            el.textContent = "-";
+            return;
+        }
+
+        // Firestore timestamp -> Date
+        const dt = meta.lastUploadAt.toDate ? meta.lastUploadAt.toDate() : null;
+        if (!dt) {
+            el.textContent = "-";
+            return;
+        }
+
+        const fmt = new Intl.DateTimeFormat("th-TH", {
+            year: "2-digit",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+        el.textContent = fmt.format(dt);
+    } catch (e) {
+        console.warn("meta read failed", e);
+    }
 }
 
-initSheet();
+// -------------------- New Bill --------------------
+$("btnNewBill")?.addEventListener("click", () => {
+    store.openBill();
+    $("runIdDisplay").textContent = "BILL: OPEN";
+    $("inputBarcode").disabled = false;
+    $("btnPayCash").disabled = false;
+    $("inputBarcode").focus();
+    renderAll();
+});
+
+// Scan add (ยังเป็น placeholder — ต่อไปค่อยต่อ DB engine)
+$("inputBarcode")?.addEventListener("keyup", (e) => {
+    if (e.key !== "Enter") return;
+    if (!store.state.billOpen) return toast("กรุณาเปิดบิลใหม่ก่อน");
+
+    const code = e.target.value.trim();
+    const qty = Math.max(1, parseInt($("inputQty").value || "1", 10));
+    if (!code) return;
+
+    const price = 100 + Math.floor(Math.random() * 200);
+    store.addItem({ code, name: "Mock Product Name", qty, price, note: "" });
+
+    e.target.value = "";
+    $("inputQty").value = 1;
+    renderAll();
+});
+
+// Pay cash (theme sheet)
+$("btnPayCash")?.addEventListener("click", () => {
+    if (!store.state.billOpen) return;
+
+    openActionSheet({
+        title: "Payment",
+        message: "Confirm cash payment?",
+        actions: [
+            { text: "Confirm", onClick: () => closeBillSuccess() },
+            { text: "Void Bill", destructive: true, onClick: () => closeBillVoid() },
+        ],
+    });
+});
+
+function closeBillSuccess() {
+    toast("Paid");
+    store.closeBill();
+    $("runIdDisplay").textContent = "BILL: -";
+    $("inputBarcode").disabled = true;
+    $("btnPayCash").disabled = true;
+    renderAll();
+}
+
+function closeBillVoid() {
+    toast("Voided");
+    store.closeBill();
+    $("runIdDisplay").textContent = "BILL: -";
+    $("inputBarcode").disabled = true;
+    $("btnPayCash").disabled = true;
+    renderAll();
+}
+
+// Daily Summary (ยังไม่ต่อ DB ยอดขายจริง)
+$("btnDailySummary")?.addEventListener("click", () => {
+    openActionSheet({
+        title: "Daily Summary",
+        message: "ยังไม่เชื่อมยอดขาย (ขั้นถัดไป)",
+        actions: [{ text: "OK" }],
+    });
+});
+
+// Action sheet demo
+$("btnOpenSheet")?.addEventListener("click", () => {
+    openActionSheet({
+        title: "Menu",
+        message: "",
+        actions: [
+            { text: "Action", onClick: () => toast("Action") },
+            { text: "Destructive Action", destructive: true, onClick: () => toast("Danger") },
+        ],
+    });
+});
+
+// -------------------- Upload Master Data (WORKING) --------------------
+$("btnUpload")?.addEventListener("click", () => $("fileImport")?.click());
+
+$("fileImport")?.addEventListener("change", async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+
+    const user = auth.currentUser;
+    if (!user) return toast("รอเชื่อมต่อ Firebase ก่อน");
+
+    let lastPct = 0;
+    toast("Uploading...");
+
+    try {
+        await importMasterFile(f, {
+            userId: user.uid,
+            onProgress: (pct) => {
+                // ลด spam
+                if (pct - lastPct >= 20 || pct === 100) {
+                    lastPct = pct;
+                    toast(`Upload ${pct}%`);
+                }
+            }
+        });
+
+        await refreshMasterMeta();
+    } catch (err) {
+        console.error(err);
+        openActionSheet({
+            title: "Upload failed",
+            message: err?.message || "Unknown error",
+            actions: [{ text: "OK" }]
+        });
+    }
+});
+
+// -------------------- Render --------------------
+function renderAll() {
+    const { subtotal, discount, net } = store.getTotals();
+    $("summarySubtotal").textContent = subtotal.toFixed(2);
+    $("summaryDiscount").textContent = discount.toFixed(2);
+    $("summaryNetTotal").textContent = net.toFixed(2);
+
+    renderCart($("cartItemsList"), store.state.items, {
+        onRemove: (index) => {
+            store.removeItem(index);
+            renderAll();
+        }
+    });
+}
+
+renderAll();
