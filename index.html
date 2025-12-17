@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Boots POS</title>
+    <title>Boots Thailand 4340 Grand 5 Sukhumvit POS</title>
 
     <!-- Google Fonts: Outfit + Noto Sans Thai -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,6 +21,9 @@
         }
     </script>
 
+    <!-- SheetJS (for Master Data import) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
     <link rel="stylesheet" href="./styles.css" />
 </head>
 
@@ -30,16 +33,22 @@
         <div class="mx-auto max-w-[1400px] px-4 pt-4">
             <div class="glass rounded-[28px] px-5 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <div
-                        class="h-11 w-11 rounded-2xl bg-black/90 text-white flex items-center justify-center font-bold text-xl shadow">
-                        B
+                    <!-- Logo -->
+                    <div class="h-11 w-11 rounded-2xl bg-white/70 border flex items-center justify-center overflow-hidden"
+                        style="border-color: var(--border);">
+                        <img src="./Logo/boots-logo-nobg.png" alt="Boots" class="h-8 w-auto" />
                     </div>
+
                     <div class="leading-tight">
-                        <div class="text-base font-bold tracking-tight">Boots POS</div>
+                        <div class="text-[15px] font-extrabold tracking-tight">
+                            Boots Thailand 4340 Grand 5 Sukhumvit POS
+                        </div>
                         <div class="flex items-center gap-2">
                             <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                             <span id="connectionStatus" class="text-[11px] font-semibold uppercase tracking-widest"
-                                style="color: var(--muted);">Ready</span>
+                                style="color: var(--muted);">
+                                READY
+                            </span>
                             <span class="text-[11px]" style="color: var(--muted);">•</span>
                             <span class="text-[11px] font-mono" style="color: var(--muted);" id="runIdDisplay">BILL:
                                 -</span>
@@ -48,22 +57,21 @@
                 </div>
 
                 <div class="flex items-center gap-3">
+                    <!-- DB Update -->
                     <div class="hidden sm:flex items-center gap-3 rounded-2xl px-4 py-2 ui-pill">
                         <div class="text-[10px] font-bold uppercase tracking-widest" style="color: var(--muted);">
-                            Products</div>
-                        <div id="totalItemsDisplay" class="font-mono font-bold">-</div>
+                            Database update</div>
+                        <div id="dbUpdateDisplay" class="text-[11px] font-mono font-bold">-</div>
                     </div>
 
                     <button id="btnDailySummary" class="ui-pill text-sm font-semibold transition hover:opacity-90">
                         Daily Summary
                     </button>
 
-                    <button id="btnUploadModal" class="ui-pill text-sm font-semibold transition hover:opacity-90">
-                        Upload Products
-                    </button>
-
-                    <button id="btnTheme" class="ui-pill text-sm font-semibold transition hover:opacity-90">
-                        Toggle Theme
+                    <!-- Theme Toggle Icon -->
+                    <button id="btnTheme" class="ui-pill transition hover:opacity-90 flex items-center justify-center"
+                        aria-label="Toggle Theme" title="Toggle Theme">
+                        <span id="themeIcon" class="inline-flex items-center justify-center"></span>
                     </button>
                 </div>
             </div>
@@ -71,17 +79,14 @@
     </header>
 
     <!-- Layout -->
-    <main class="mx-auto max-w-[1400px] px-4 py-6 space-y-6">
+    <main class="mx-auto max-w-[1400px] px-4 py-6">
         <div class="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
 
             <!-- Left -->
             <aside class="space-y-6">
                 <section class="card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <div class="text-sm font-bold tracking-tight">New Transaction</div>
-                            <div class="text-xs" style="color: var(--muted);">iOS-like clean theme (light/dark)</div>
-                        </div>
+                        <div class="text-sm font-bold tracking-tight">New Transaction</div>
                     </div>
 
                     <button id="btnNewBill" class="btn-primary w-full">
@@ -101,18 +106,13 @@
                                 style="color: var(--muted);">Scan / Code</label>
                             <input id="inputBarcode" type="text" placeholder="Scan item..."
                                 class="ui-input mt-2 font-semibold" disabled />
-                            <div class="mt-2 text-[11px]" style="color: var(--muted);">Enter เพื่อเพิ่มรายการ (เดโมธีม)
-                            </div>
                         </div>
                     </div>
                 </section>
 
                 <section class="card p-6">
                     <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-bold tracking-tight">Search</div>
-                            <div class="text-xs" style="color: var(--muted);">พิมพ์แล้วโชว์ 5 ผลลัพธ์ด้านล่าง</div>
-                        </div>
+                        <div class="text-sm font-bold tracking-tight">Search</div>
                     </div>
 
                     <div class="mt-4 relative">
@@ -124,15 +124,13 @@
 
                 <section class="card p-6">
                     <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-bold tracking-tight">Actions</div>
-                            <div class="text-xs" style="color: var(--muted);">ตัวอย่าง Action Sheet ธีมเดียวกัน</div>
-                        </div>
+                        <div class="text-sm font-bold tracking-tight">Master Data</div>
                     </div>
 
                     <div class="mt-4 grid grid-cols-2 gap-3">
-                        <button id="btnOpenSheet" class="ui-pill h-12 font-semibold">Open Action Sheet</button>
-                        <button id="btnUpload" class="ui-pill h-12 font-semibold">Upload CSV</button>
+                        <button id="btnUpload" class="ui-pill h-12 font-semibold">Upload Master</button>
+                        <button id="btnOpenSheet" class="ui-pill h-12 font-semibold">Action Sheet</button>
+                        <input type="file" id="fileImport" class="hidden" accept=".xlsx,.xls,.csv" />
                     </div>
                 </section>
             </aside>
@@ -141,15 +139,11 @@
             <section class="card overflow-hidden">
                 <div class="px-6 py-5 border-b" style="border-color: var(--border);">
                     <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-bold tracking-tight">Cart</div>
-                            <div class="text-xs" style="color: var(--muted);">รายการสินค้าในบิล</div>
-                        </div>
-                        <div class="text-xs font-mono" style="color: var(--muted);" id="modeLabel">Mode: iOS Clean</div>
+                        <div class="text-sm font-bold tracking-tight">รายการสินค้า</div>
                     </div>
                 </div>
 
-                <div class="px-6 py-3 text-[11px] font-bold uppercase tracking-widest grid grid-cols-[56px_96px_1fr_80px_96px_96px_64px] gap-4"
+                <div class="px-6 py-3 text-[11px] font-bold uppercase tracking-widest grid grid-cols-[56px_96px_1fr_80px_96px_96px_40px] gap-4"
                     style="color: var(--muted); background: rgba(148,163,184,.08);">
                     <div class="text-center">No</div>
                     <div class="text-center">Code</div>
@@ -157,7 +151,7 @@
                     <div class="text-center">Qty</div>
                     <div class="text-right">Price</div>
                     <div class="text-right">Total</div>
-                    <div class="text-center">Action</div>
+                    <div class="text-center"></div>
                 </div>
 
                 <div id="cartItemsList" class="h-[420px] overflow-y-auto"></div>
@@ -176,7 +170,7 @@
                             </div>
                             <div class="pt-4 mt-4 border-t border-dashed flex justify-between items-baseline"
                                 style="border-color: var(--border);">
-                                <span class="text-xl font-bold tracking-tight">Total Due</span>
+                                <span class="text-xl font-bold tracking-tight">Total</span>
                                 <span id="summaryNetTotal" class="text-5xl font-bold tracking-tighter">0.00</span>
                             </div>
                         </div>
@@ -189,65 +183,6 @@
             </section>
         </div>
     </main>
-
-    <!-- Upload Modal -->
-    <div id="uploadOverlay" class="upload-overlay hidden">
-        <div class="upload-modal card">
-            <div class="flex items-start justify-between gap-3 pb-4 border-b" style="border-color: var(--border);">
-                <div>
-                    <div class="text-sm font-bold tracking-tight">Upload Product CSV</div>
-                    <div class="text-xs" style="color: var(--muted);">Clean, modern, fast lane สำหรับไฟล์ 26 คอลัมน์</div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="upload-pill">Secure Upload</span>
-                    <span class="upload-pill">Firebase Ready</span>
-                    <button id="btnUploadClose" class="ui-pill text-sm font-semibold">Close</button>
-                </div>
-            </div>
-
-            <div class="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] mt-5">
-                <div id="uploadDropZone" class="upload-drop">
-                    <div>
-                        <div class="text-lg font-semibold">ลากไฟล์ .csv มาวางที่นี่</div>
-                        <div class="text-sm mt-1" style="color: var(--muted);">รองรับ UTF-8, 26 columns, จำกัดขนาด 20MB</div>
-                    </div>
-                    <div class="flex flex-wrap gap-3 mt-6">
-                        <button id="btnUploadBrowse" class="btn-primary h-12 px-6 text-sm">เลือกไฟล์</button>
-                        <div class="upload-meta">
-                            <div class="text-[11px] uppercase font-bold tracking-widest" style="color: var(--muted);">ชื่อไฟล์</div>
-                            <div id="uploadFileName" class="font-semibold">ยังไม่เลือกไฟล์</div>
-                            <div id="uploadFileSize" class="text-xs" style="color: var(--muted);">-</div>
-                        </div>
-                    </div>
-                    <input type="file" id="productCsvInput" accept=".csv" class="hidden" />
-                </div>
-
-                <div class="space-y-4">
-                    <div class="upload-status">
-                        <div class="flex items-center justify-between gap-3 mb-3">
-                            <div>
-                                <div id="uploadStatusText" class="text-sm font-bold">Ready to upload</div>
-                                <div id="uploadStatusNote" class="text-xs" style="color: var(--muted);">รองรับไฟล์ .csv</div>
-                            </div>
-                            <div class="text-xs font-mono" style="color: var(--muted);">Rows: <span id="uploadRows">กำลังประเมิน...</span></div>
-                        </div>
-                        <div class="upload-progress">
-                            <div class="upload-progress-inner" id="uploadProgressBar" style="width: 0%;"></div>
-                        </div>
-                        <pre id="uploadPreview" class="upload-preview">// preview จะโชว์ที่นี่หลังเลือกไฟล์</pre>
-                        <div id="uploadErrors" class="hidden"></div>
-                    </div>
-
-                    <div class="upload-columns" id="uploadColumns"></div>
-
-                    <div class="upload-footer">
-                        <div class="text-xs font-semibold">Firebase ready</div>
-                        <div id="uploadFirebaseHint" class="text-[11px]" style="color: var(--muted);"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- iOS Action Sheet -->
     <div id="iosBackdrop" class="ios-backdrop"></div>
