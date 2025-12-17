@@ -1,71 +1,16 @@
-# Deployment Guide for POS System
+# React + Vite
 
-## Prerequisites
-- Node.js installed.
-- A Firebase Project created at [console.firebase.google.com](https://console.firebase.google.com).
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 1. Configure Firebase in Code
-1. Open this folder in VS Code.
-2. Open `app.js`.
-3. Locate the `firebaseConfig` object at the top.
-4. Replace the placeholder strings with your actual Firebase Web App configuration from the Firebase Console (Project settings > General > Your apps).
+Currently, two official plugins are available:
 
-## 2. Install Firebase CLI
-Open a terminal in this directory and run:
-```bash
-npm install -g firebase-tools
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## 3. Login and Init
-```bash
-firebase login
-firebase init hosting
-```
-- Select your project.
-- Public directory: `.` (Current directory) or create a `public` folder and move html/js there (but `.` is fine for simple setup).
-- Configure as single-page app? **No** (It's simple HTML).
-- Set up automatic builds and deploys with GitHub? **No** (unless you want to).
-- **IMPORTANT**: If it asks to overwrite `index.html`, say **NO**.
+## React Compiler
 
-## 4. Deploy
-```bash
-firebase deploy --only hosting
-```
-The terminal will output a Hosting URL. Open it to use the POS.
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## 5. Security Rules
-Copy the content below into your Firestore Rules in the Firebase Console (Firestore Database > Rules):
+## Expanding the ESLint configuration
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // Runs (Bills): Allow read/write if authenticated (Anonymous is fine)
-    match /runs/{runId} {
-      allow read, write: if request.auth != null;
-      
-      // Items subcollection
-      match /items/{itemId} {
-        allow read, write: if request.auth != null;
-      }
-    }
-
-    // Products & Barcodes: Read-only for everyone (or auth users), Write restricted (Admin only or disabled)
-    match /products/{productCode} {
-      allow read: if true;
-      allow write: if false; 
-    }
-    
-    match /barcodes/{barcode} {
-      allow read: if true;
-      allow write: if false;
-    }
-    
-    // Counters (if used)
-    match /counters/{name} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
