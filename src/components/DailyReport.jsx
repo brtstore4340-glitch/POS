@@ -55,7 +55,7 @@ const DailyReport = () => {
 
             {/* Content */}
             <div className="flex-1 overflow-auto p-6 space-y-8">
-                {list.length === 0 && !loading && (
+                {bills.length === 0 && !loading && (
                     <div className="text-center text-slate-400 py-10">No transactions today</div>
                 )}
 
