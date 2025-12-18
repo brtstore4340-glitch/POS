@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, collection, getDocs } from '../services/firebase';
 import { calculatePrice } from '../features/pricing';
 
+import LoadingScreen from '../components/LoadingScreen';
+import MaintenanceMode from '../components/MaintenanceMode';
+
 const PosContext = createContext();
 
 export const usePos = () => useContext(PosContext);
@@ -10,6 +13,8 @@ export const PosProvider = ({ children }) => {
     // Master Data
     const [products, setProducts] = useState({}); // Map<Code, Product>
     const [loadingProducts, setLoadingProducts] = useState(true);
+    const [loadingProgress, setLoadingProgress] = useState(0);
+    const [error, setError] = useState(null);
 
     // Transaction State
     const [billId, setBillId] = useState('');
@@ -18,27 +23,48 @@ export const PosProvider = ({ children }) => {
 
     // Load Products
     useEffect(() => {
-        const fetchProducts = async () => {
-            try {
-                const querySnapshot = await getDocs(collection(db, "products"));
-                const map = {};
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    // Index by both Code and Barcode if possible, for now Code
-                    if (data.code) map[data.code] = data;
-                    if (data.barcode && data.barcode !== data.code) map[data.barcode] = data;
-                });
-                setProducts(map);
-            } catch (error) {
-                console.error("Error loading products:", error);
-            } finally {
-                setLoadingProducts(false);
-            }
-        };
-
         fetchProducts();
         generateBillId();
     }, []);
+
+    const fetchProducts = async () => {
+        setLoadingProducts(true);
+        setError(null);
+        setLoadingProgress(0);
+
+        // Simulate progress
+        const progressInterval = setInterval(() => {
+            setLoadingProgress(prev => {
+                if (prev >= 90) return prev;
+                // Slow down as it gets higher
+                const increment = prev > 60 ? 1 : 5;
+                return prev + increment;
+            });
+        }, 100);
+
+        try {
+            const querySnapshot = await getDocs(collection(db, "products"));
+            const map = {};
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.code) map[data.code] = data;
+                if (data.barcode && data.barcode !== data.code) map[data.barcode] = data;
+            });
+            setProducts(map);
+            setLoadingProgress(100);
+
+            // Short delay to let the 100% show before fading out
+            setTimeout(() => {
+                setLoadingProducts(false);
+            }, 500);
+
+        } catch (error) {
+            console.error("Error loading products:", error);
+            setError(error);
+        } finally {
+            clearInterval(progressInterval);
+        }
+    };
 
     const generateBillId = () => {
         const now = new Date();
@@ -124,7 +150,14 @@ export const PosProvider = ({ children }) => {
             clearBill,
             totals: { subtotal, totalDiscount, netTotal }
         }}>
-            {children}
+            {error ? (
+                <MaintenanceMode onRetry={fetchProducts} />
+            ) : (
+                <>
+                    {children}
+                    <LoadingScreen isLoading={loadingProducts} progress={loadingProgress} />
+                </>
+            )}
         </PosContext.Provider>
     );
 };
