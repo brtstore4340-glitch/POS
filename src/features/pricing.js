@@ -58,7 +58,11 @@ export const calculatePrice = (product, qty, method = 0) => {
             break;
     }
 
-    discount = (regPrice * qty) - total;
+    if (Number(method) === 1) {
+        discount = Math.max(0, (regPrice - dealPrice) * qty);
+    } else {
+        discount = 0;
+    }
 
     return {
         unitPrice,

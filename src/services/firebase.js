@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, getDocs, query, where, orderBy } from "firebase/firestore";
+import { getFirestore, collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, getDocs, query, where, orderBy, addDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -15,4 +15,4 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-export { app, db, auth, collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, getDocs, orderBy, query, where };
+export { app, db, auth, collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, getDocs, orderBy, query, where, addDoc };
