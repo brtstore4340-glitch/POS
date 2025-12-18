@@ -1,168 +1,87 @@
-import { db, doc, writeBatch, collection, serverTimestamp } from './firebase';
+// src/services/dataService.js
 import * as XLSX from 'xlsx';
 
 export const PRODUCT_STORAGE_KEYS = {
-    itemExport: 'pos.itemExport',
-    productMaster: 'pos.productMaster',
+    productMaster: 'pos_product_master_v1',
+    itemExport: 'pos_item_export_v1'
 };
 
-const normalizeNumber = (value) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : 0;
-};
+// ฟังก์ชันอ่านไฟล์ รองรับทั้ง .xlsx, .xls และ .csv
+const readFile = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
 
-const normalizeText = (value) => {
-    if (value === null || value === undefined) return '';
-    return String(value).trim();
-};
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                // type: 'array' รองรับไฟล์ได้ครอบคลุมที่สุดทั้ง Excel รุ่นเก่า/ใหม่ และ CSV
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                // อ่าน Sheet แรกเสมอ
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // แปลงเป็น JSON โดยใช้ header: 'A' เพื่ออ้างอิง Column เป็นตัวอักษร A, B, C...
+                // defval: '' ป้องกันค่า undefined ในช่องว่าง
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 'A', defval: '' });
+                resolve(jsonData);
+            } catch (err) {
+                console.error("Error parsing file:", err);
+                reject(new Error("ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าเป็นไฟล์ Excel หรือ CSV ที่ถูกต้อง"));
+            }
+        };
 
-const buildProduct = ({ code, barcode, name, price, dealPrice, method }) => {
-    const normalizedCode = normalizeText(code);
-    const normalizedBarcode = normalizeText(barcode);
-
-    return {
-        code: normalizedCode,
-        barcode: normalizedBarcode || normalizedCode,
-        name: normalizeText(name) || 'Unknown Item',
-        price: normalizeNumber(price),
-        dealPrice: normalizeNumber(dealPrice),
-        method: normalizeNumber(method),
-        updatedAt: Date.now(),
-    };
-};
-
-const saveToFirestore = async (products, onProgress) => {
-    const batchSize = 400;
-    const total = products.length;
-    let processed = 0;
-
-    for (let i = 0; i < total; i += batchSize) {
-        const chunk = products.slice(i, i + batchSize);
-        const batch = writeBatch(db);
-
-        chunk.forEach((product) => {
-            if (!product.code) return;
-            const docRef = doc(db, 'products', product.code);
-            batch.set(docRef, {
-                ...product,
-                updatedAt: serverTimestamp(),
-            });
-        });
-
-        await batch.commit();
-        processed += chunk.length;
-        if (onProgress) onProgress(Math.round((processed / total) * 100));
-    }
-};
-
-const readSheetRows = async (file) => {
-    const buffer = await file.arrayBuffer();
-    const data = new Uint8Array(buffer);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    return XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        reader.onerror = (err) => reject(new Error("การอ่านไฟล์ล้มเหลว"));
+        
+        // ใช้ readAsArrayBuffer เพื่อรองรับทุก Format (.xlsx, .xls, .csv)
+        reader.readAsArrayBuffer(file);
+    });
 };
 
 export const importItemExport = async (file, onProgress) => {
-    const rows = await readSheetRows(file);
-
-    if (!rows.length) {
-        throw new Error('Empty file');
-    }
-
-    const products = [];
-
-    rows.forEach((row, index) => {
-        if (!Array.isArray(row)) return;
-
-        if (index === 0) {
-            const headerText = normalizeText(row.join(' ')).toLowerCase();
-            if (headerText.includes('product') || headerText.includes('barcode')) {
-                return;
-            }
+    if (onProgress) onProgress(10);
+    
+    try {
+        // ตรวจสอบนามสกุลไฟล์เบื้องต้น (Optional validation)
+        const fileName = file.name.toLowerCase();
+        if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls') && !fileName.endsWith('.csv')) {
+            throw new Error("รองรับเฉพาะไฟล์ .xlsx, .xls และ .csv เท่านั้น");
         }
 
-        const name = row[1]; // Column B
-        const method = row[5]; // Column F
-        const regPrice = row[6]; // Column G
-        const code = row[7]; // Column H
-        const dealPrice = row[8]; // Column I
-        const barcode = row[11]; // Column L
+        const rawData = await readFile(file);
+        if (onProgress) onProgress(40);
 
-        const product = buildProduct({
-            code,
-            barcode,
-            name,
-            price: regPrice,
-            dealPrice,
-            method,
-        });
+        // Mapping Data ตาม Column 
+        // B: Description (Name)
+        // F: Method
+        // G: Reg. Price
+        // H: Product Code
+        // I: Deal Price
+        // L: Barcode
+        const processedData = rawData.slice(1).map(row => {
+            return {
+                name: row['B'] ? String(row['B']).trim() : 'Unknown Item',
+                method: row['F'] ? parseInt(row['F']) : 0,
+                price: row['G'] ? parseFloat(row['G']) : 0,
+                code: row['H'] ? String(row['H']).trim().toUpperCase() : '',
+                dealPrice: row['I'] ? parseFloat(row['I']) : 0,
+                barcode: row['L'] ? String(row['L']).trim().toUpperCase() : ''
+            };
+        }).filter(item => item.code || item.barcode); // กรองเอาเฉพาะแถวที่มี Code หรือ Barcode
 
-        if (!product.code && !product.barcode) return;
-        products.push(product);
-    });
-
-    if (!products.length) {
-        throw new Error('No valid rows found');
+        // บันทึกลง LocalStorage
+        localStorage.setItem(PRODUCT_STORAGE_KEYS.itemExport, JSON.stringify(processedData));
+        
+        if (onProgress) onProgress(100);
+        return processedData;
+    } catch (error) {
+        console.error("Error importing Item Export:", error);
+        throw error;
     }
-
-    localStorage.setItem(PRODUCT_STORAGE_KEYS.itemExport, JSON.stringify(products));
-    await saveToFirestore(products, onProgress);
-
-    return { count: products.length };
 };
 
 export const importProductMaster = async (file, onProgress) => {
-    const rows = await readSheetRows(file);
-
-    if (!rows.length) {
-        throw new Error('Empty file');
-    }
-
-    const header = rows[0] || [];
-    const headerMap = {};
-    header.forEach((cell, idx) => {
-        const key = normalizeText(cell).toLowerCase();
-        if (key) headerMap[key] = idx;
-    });
-
-    const findIndex = (keyPart, fallback) => {
-        const match = Object.keys(headerMap).find((key) => key.includes(keyPart));
-        return match ? headerMap[match] : fallback;
-    };
-
-    const idxName = findIndex('name', 1);
-    const idxMethod = findIndex('method', 5);
-    const idxRegPrice = findIndex('reg', 6);
-    const idxCode = findIndex('product code', 7);
-    const idxDealPrice = findIndex('deal', 8);
-    const idxBarcode = findIndex('barcode', 11);
-
-    const products = [];
-
-    rows.slice(1).forEach((row) => {
-        if (!Array.isArray(row)) return;
-
-        const product = buildProduct({
-            code: row[idxCode],
-            barcode: row[idxBarcode],
-            name: row[idxName],
-            price: row[idxRegPrice],
-            dealPrice: row[idxDealPrice],
-            method: row[idxMethod],
-        });
-
-        if (!product.code && !product.barcode) return;
-        products.push(product);
-    });
-
-    if (!products.length) {
-        throw new Error('No valid rows found');
-    }
-
-    localStorage.setItem(PRODUCT_STORAGE_KEYS.productMaster, JSON.stringify(products));
-    await saveToFirestore(products, onProgress);
-
-    return { count: products.length };
+    // ใช้ Logic เดียวกัน หรือแยกถ้าโครงสร้างไฟล์ต่างกัน
+    // ในที่นี้ให้เรียกใช้ importItemExport ไปก่อน
+    return importItemExport(file, onProgress);
 };

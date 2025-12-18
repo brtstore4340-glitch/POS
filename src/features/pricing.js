@@ -1,43 +1,37 @@
-/**
- * Calculate Item Price based on Method
- * @param {object} product - Product Data { price, dealPrice, methods, ... }
- * @param {number} qty - Quantity
- * @param {number} method - Pricing Method (0-9)
- * @returns {object} { unitPrice, total, discount, isPromo }
- */
-export const calculatePrice = (product, qty, method = 0) => {
-    const regPrice = Number(product.price) || 0;
-    const dealPrice = Number(product.dealPrice) || regPrice;
+// src/features/pricing.js
+export const calculatePrice = (product, qty = 1, method = 0) => {
+    // แปลงค่าให้เป็นตัวเลขที่แน่นอน
+    const regPrice = Number(product.price) || 0;     // จาก Column G (Reg. Price)
+    const dealPrice = Number(product.dealPrice) || 0; // จาก Column I (Deal Price)
+    const safeQty = Number(qty) || 1;
+    const currentMethod = Number(method);
+
     let unitPrice = regPrice;
     let isPromo = false;
 
-    // Safety check for quantity
-    if (qty < 1) qty = 1;
-
-    switch (Number(method)) {
-        case 1: // Use Deal Price
-            unitPrice = dealPrice;
-            isPromo = unitPrice < regPrice;
-            break;
-
-        case 0:
-        case 8:
-        case 9:
-        case 17:
-        case 18:
-        case 19:
-        default: // Use Regular Price for these methods and as a fallback
-            unitPrice = regPrice;
-            break;
+    // Logic การเลือกราคาตาม Method
+    // Method 1 ใช้ราคา Deal Price
+    // Method 0, 8, 9, 17, 18, 19 ใช้ราคา Reg Price
+    if (currentMethod === 1) {
+        unitPrice = dealPrice;
+        isPromo = true;
+    } else {
+        unitPrice = regPrice;
+        isPromo = false;
     }
 
-    const total = unitPrice * qty;
-    const discount = Math.max(0, (regPrice * qty) - total);
+    // คำนวณส่วนลด (Discount = ราคาปกติ - ราคาที่ขายจริง)
+    // ถ้าขายราคาปกติ ส่วนลดจะเป็น 0
+    // ถ้าขายราคา Deal ส่วนลดจะเป็น Reg - Deal
+    const discountPerUnit = Math.max(0, regPrice - unitPrice);
+    const totalDiscount = discountPerUnit * safeQty;
+    const total = unitPrice * safeQty;
 
     return {
         unitPrice,
         total,
-        discount,
-        isPromo
+        discount: totalDiscount,
+        isPromo,
+        method: currentMethod
     };
 };
