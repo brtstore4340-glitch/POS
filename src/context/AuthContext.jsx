@@ -100,10 +100,12 @@ export const AuthProvider = ({ children }) => {
                         setMustChangePassword(userData.mustChangePassword === true);
                     } else {
                         // Fallback if user doc missing (e.g. just created in Auth but not Firestore)
+                        console.warn("User document not found in Firestore for UID:", currentUser.uid);
                         setRole('user');
                     }
                 } catch (err) {
                     console.error("Error fetching user role:", err);
+                    // Still set as 'user' to allow basic access
                     setRole('user');
                 }
                 setUser(currentUser);

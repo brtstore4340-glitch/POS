@@ -40,40 +40,40 @@ const PosCheckout = () => {
         return (
             <div className="flex flex-col items-center justify-center h-full text-slate-400">
                 <Banknote size={48} className="mb-4 opacity-50" />
-                <p>No items in bill</p>
+                <p>ไม่มีสินค้าในบิล</p>
             </div>
         );
     }
 
     return (
         <div className="flex flex-col h-full">
-            <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-                <CreditCard className="text-blue-600" size={20} />
-                Checkout
+            <h3 className="font-bold text-base md:text-lg mb-4 md:mb-6 flex items-center gap-2" style={{ color: '#4285F4' }}>
+                <CreditCard size={18} />
+                ชำระเงิน
             </h3>
 
             {/* Totals */}
-            <div className="space-y-3 mb-6">
+            <div className="space-y-2 md:space-y-3 mb-4 md:mb-6 text-sm md:text-base">
                 <div className="flex justify-between text-slate-500 font-medium">
-                    <span>Subtotal</span>
+                    <span>ราคารวม</span>
                     <span>{totals.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-green-600 font-medium">
-                    <span>Discount</span>
+                    <span>ส่วนลด</span>
                     <span>-{totals.totalDiscount.toFixed(2)}</span>
                 </div>
-                <div className="pt-4 border-t border-slate-100">
+                <div className="pt-2 md:pt-4 border-t border-slate-100">
                     <div className="flex justify-between items-end">
-                        <span className="text-lg font-bold text-slate-900">Total</span>
-                        <span className="text-3xl font-extrabold text-blue-600">
-                            {totals.netTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <span className="text-base md:text-lg font-bold text-slate-900">ยอดสุทธิ</span>
+                        <span className="text-2xl md:text-3xl font-extrabold" style={{ color: '#4285F4' }}>
+                            {totals.netTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                     </div>
                 </div>
             </div>
 
             {/* Payment Input */}
-            <div className="mt-auto space-y-4">
+            <div className="mt-auto space-y-3 md:space-y-4">
                 <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
                         รับเงิน (F4)
@@ -88,7 +88,11 @@ const PosCheckout = () => {
                                 if (e.key === 'Enter') handlePay();
                             }}
                             onFocus={() => setBillStep('payment')}
-                            className="w-full text-3xl font-bold p-4 rounded-xl bg-slate-50 border-2 border-slate-200 focus:border-blue-500 focus:outline-none text-right"
+                            className="w-full text-2xl md:text-3xl font-bold p-3 md:p-4 rounded-lg md:rounded-xl bg-slate-50 border-2 focus:outline-none text-right transition-all"
+                            style={{
+                                borderColor: billStep === 'payment' ? '#4285F4' : '#cbd5e1',
+                                boxShadow: billStep === 'payment' ? '0 0 0 4px rgba(66, 133, 244, 0.1)' : 'none'
+                            }}
                             placeholder="0.00"
                         />
                     </div>
@@ -98,18 +102,21 @@ const PosCheckout = () => {
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">
                         เงินทอน
                     </label>
-                    <div className="w-full text-2xl font-bold p-3 rounded-xl bg-slate-100 text-slate-400 text-right">
-                        {change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="w-full text-xl md:text-2xl font-bold p-2 md:p-3 rounded-lg md:rounded-xl bg-slate-100 text-slate-400 text-right">
+                        {change.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                 </div>
 
                 <button
                     onClick={handlePay}
                     disabled={!canPay}
-                    className={`w-full py-4 rounded-xl text-lg font-bold text-white shadow-lg transition-all ${canPay
-                            ? 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-200 shadow-blue-100'
-                            : 'bg-slate-300 cursor-not-allowed'
+                    className={`w-full py-3 md:py-4 rounded-lg md:rounded-xl text-base md:text-lg font-bold text-white shadow-lg transition-all ${canPay
+                            ? 'hover:shadow-lg'
+                            : 'cursor-not-allowed opacity-50'
                         }`}
+                    style={{
+                        backgroundColor: canPay ? '#4285F4' : '#cbd5e1',
+                    }}
                 >
                     {canPay ? `รับเงิน (Enter)` : 'กรอกจำนวนเงิน'}
                 </button>

@@ -11,17 +11,18 @@ const MaintenanceMode = ({ onRetry }) => {
                     </div>
                 </div>
 
-                <h1 className="text-2xl font-bold text-slate-900 mb-2">System Maintenance</h1>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">ระบบกำลังบำรุงรักษา</h1>
                 <p className="text-slate-500 mb-8">
-                    We're having trouble connecting to the server. This could be due to a poor internet connection or scheduled maintenance.
+                    เกิดปัญหาในการเชื่อมต่อเซิร์ฟเวอร์ อาจเป็นเพราะอินเทอร์เน็ต หรือการบำรุงรักษาประจำ
                 </p>
 
                 <button
                     onClick={onRetry}
-                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-6 rounded-xl transition-colors active:scale-95"
+                    className="w-full flex items-center justify-center gap-2 text-white font-medium py-3 px-6 rounded-xl transition-all active:scale-95 hover:shadow-lg"
+                    style={{ backgroundColor: '#4285F4' }}
                 >
                     <RefreshCw className="w-5 h-5" />
-                    Retry Connection
+                    ลองใหม่
                 </button>
             </div>
         </div>

@@ -42,10 +42,12 @@ export const PosProvider = ({ children }) => {
         const map = {};
         const list = [];
         const seen = new Set();
+        const codeIndex = new Map(); // Index for fast lookup by code
+        const barcodeIndex = new Map(); // Index for fast lookup by barcode
 
         items.forEach((item) => {
-            const code = String(item.code || '').trim();
-            const barcode = String(item.barcode || '').trim();
+            const code = String(item.code || '').trim().toUpperCase();
+            const barcode = String(item.barcode || '').trim().toUpperCase();
             if (!code && !barcode) return;
 
             const product = {
@@ -59,8 +61,14 @@ export const PosProvider = ({ children }) => {
                 nameLower: String(item.name || '').toLowerCase(),
             };
 
-            if (code) map[code] = product;
-            if (barcode && barcode !== code) map[barcode] = product;
+            if (code) {
+                map[code] = product;
+                codeIndex.set(code, product);
+            }
+            if (barcode && barcode !== code) {
+                map[barcode] = product;
+                barcodeIndex.set(barcode, product);
+            }
 
             if (code && !seen.has(code)) {
                 seen.add(code);
@@ -68,7 +76,7 @@ export const PosProvider = ({ children }) => {
             }
         });
 
-        return { map, list };
+        return { map, list, codeIndex, barcodeIndex };
     };
 
     const loadFromStorage = () => {
@@ -80,7 +88,7 @@ export const PosProvider = ({ children }) => {
         try {
             const items = JSON.parse(stored);
             if (Array.isArray(items) && items.length > 0) {
-                const { map, list } = buildProductState(items);
+                const { map, list, codeIndex, barcodeIndex } = buildProductState(items);
                 setProducts(map);
                 setProductList(list);
                 setLoadingProgress(100);
@@ -119,7 +127,7 @@ export const PosProvider = ({ children }) => {
             });
 
             if (items.length > 0) {
-                const { map, list } = buildProductState(items);
+                const { map, list, codeIndex, barcodeIndex } = buildProductState(items);
                 setProducts(map);
                 setProductList(list);
             }
@@ -148,8 +156,8 @@ export const PosProvider = ({ children }) => {
         const mm = String(now.getMonth() + 1).padStart(2, '0');
         const yy = String(now.getFullYear()).slice(-2);
         const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        const stamp = `${dd}${mm}${yy}${hh}${min}`;
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        const stamp = `${dd}${mm}${yy}${hh}${mins}`;
         if (billSequenceRef.current.stamp === stamp) {
             billSequenceRef.current.seq += 1;
         } else {
@@ -160,7 +168,20 @@ export const PosProvider = ({ children }) => {
     };
 
     const addItem = (code, qty = 1) => {
-        const product = products[code];
+        // Normalize input: uppercase and trim
+        const normalizedCode = String(code || '').trim().toUpperCase();
+        
+        // First try direct lookup
+        let product = products[normalizedCode];
+        
+        // If not found, try case-insensitive search in products
+        if (!product && normalizedCode) {
+            product = Object.values(products).find(p => 
+                p.code?.toUpperCase() === normalizedCode || 
+                p.barcode?.toUpperCase() === normalizedCode
+            );
+        }
+        
         if (!product) return false; // Not found
 
         const existingIdx = cart.findIndex(item => item.code === product.code);

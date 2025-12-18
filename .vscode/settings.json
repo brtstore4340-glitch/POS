@@ -1,3 +1,9 @@
 {
-    "chatgpt.openOnStartup": true
+    "chatgpt.openOnStartup": true,
+    "yaml.schemas": {
+        "file:///c%3A/Users/User/.vscode/extensions/continue.continue-1.2.11-win32-x64/config-yaml-schema.json": [
+            ".continue/**/*.yaml",
+            "file:///d%3A/01%20Main%20Work/Boots/Boots-POS/.continue/agents/config.yaml"
+        ]
+    }
 }

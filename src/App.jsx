@@ -24,8 +24,9 @@ const AppContent = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <Loader2 className="w-10 h-10 animate-spin" style={{ color: '#4285F4' }} />
+        <p className="text-slate-500 font-medium">กำลังโหลดระบบ...</p>
       </div>
     );
   }
@@ -50,15 +51,15 @@ const AppContent = () => {
           <Header />
 
           {/* Main Content Area */}
-          <main className="flex-1 p-6 overflow-hidden">
+          <main className="flex-1 p-4 md:p-6 overflow-hidden">
 
             {view === 'dashboard' && (
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 h-full text-sm sm:text-base">
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 md:gap-6 h-full text-sm sm:text-base">
                 <div className="flex flex-col h-full overflow-hidden">
                   <PosTerminal />
                 </div>
                 <div className="h-full overflow-hidden">
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 h-full">
+                  <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-slate-100 h-full flex flex-col">
                     <PosCheckout />
                   </div>
                 </div>
@@ -67,9 +68,6 @@ const AppContent = () => {
 
             {/* Settings View: 
                 If Admin: Show Settings + User Management 
-                Actually, simpler to likely make UserManagement PART of settings or a sub-tab.
-                But for now, if 'settings' is selected and user is admin, let's show UserManagement + other settings?
-                Or just UserManagement as the main "Settings" feature for now.
             */}
             {view === 'settings' && role === 'admin' && (
               <div className="h-full space-y-6 overflow-y-auto">

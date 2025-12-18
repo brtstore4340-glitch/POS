@@ -3,6 +3,7 @@
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900;
+    scroll-behavior: smooth;
   }
 }
 
@@ -22,4 +23,20 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-400;
+}
+
+/* Smooth Transitions */
+* {
+  @apply transition-colors duration-150;
+}
+
+button {
+  @apply transition-all duration-200;
+}
+
+/* Input Focus States */
+input:focus,
+textarea:focus,
+select:focus {
+  @apply outline-none;
 }

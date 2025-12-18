@@ -41,8 +41,8 @@ const DailyReport = () => {
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex-1 overflow-hidden flex flex-col h-full">
-            {/* Report Header */}
-            <div className="p-6 border-b border-slate-100 bg-blue-50">
+            {/* Report Header - Google Blue */}
+            <div className="p-6 border-b border-slate-100 bg-blue-50" style={{ borderBottomColor: '#4285F4', backgroundColor: '#f0f7ff' }}>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4">
                         <img
@@ -54,23 +54,23 @@ const DailyReport = () => {
                             <h1 className="text-lg font-bold uppercase tracking-tight text-slate-800">
                                 4340 Grand 5 Sukhumvit Daily Sale IT Maintenance Report
                             </h1>
-                            <div className="text-xs text-blue-700 font-medium">รายงานประจำวันที่ {reportDate}</div>
+                            <div className="text-xs text-blue-700 font-medium" style={{ color: '#4285F4' }}>รายงานประจำวันที่ {reportDate}</div>
                         </div>
                     </div>
                     <div className="text-right">
-                        <div className="text-xs font-bold text-slate-500">Total Bills</div>
-                        <div className="text-2xl font-extrabold text-blue-700">{bills.length}</div>
+                        <div className="text-xs font-bold text-slate-500">รวมบิล</div>
+                        <div className="text-2xl font-extrabold" style={{ color: '#4285F4' }}>{bills.length}</div>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-6 flex-wrap gap-2">
                     <div className="text-sm font-bold text-slate-500">
-                        Grand Total: <span className="text-blue-600 text-2xl">{totalAmount.toLocaleString()} THB</span>
+                        ยอดรวมทั้งหมด: <span className="text-2xl" style={{ color: '#4285F4' }}>{totalAmount.toLocaleString()} THB</span>
                     </div>
                     <div className="text-sm font-bold text-slate-500">
-                        Total Received: <span className="text-slate-900 text-xl">{totalReceived.toLocaleString()} THB</span>
+                        ยอดรับชำระ: <span className="text-xl text-slate-900">{totalReceived.toLocaleString()} THB</span>
                     </div>
                     <div className="text-sm font-bold text-slate-500">
-                        Total Change: <span className="text-slate-900 text-xl">{totalChange.toLocaleString()} THB</span>
+                        เงินทอน: <span className="text-xl text-slate-900">{totalChange.toLocaleString()} THB</span>
                     </div>
                 </div>
             </div>
@@ -78,24 +78,24 @@ const DailyReport = () => {
             {/* Content */}
             <div className="flex-1 overflow-auto p-6 space-y-8">
                 {bills.length === 0 && !loading && (
-                    <div className="text-center text-slate-400 py-10">No transactions today</div>
+                    <div className="text-center text-slate-400 py-10">ไม่มีบิลประจำวันนี้</div>
                 )}
 
                 {bills.map((bill) => (
                     <div key={bill.id} className="border border-slate-200 rounded-lg p-4 break-inside-avoid">
                         <div className="flex justify-between mb-2 text-xs font-mono text-slate-500 border-b border-dashed border-slate-200 pb-2">
-                            <span>Bill: {bill.billNo}</span>
-                            <span>{bill.timestamp?.toDate ? bill.timestamp.toDate().toLocaleString() : 'Just now'}</span>
+                            <span>บิล: {bill.billNo}</span>
+                            <span>{bill.timestamp?.toDate ? bill.timestamp.toDate().toLocaleString('th-TH') : 'เมื่อสักครู่'}</span>
                         </div>
 
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="text-xs text-slate-400 uppercase text-left">
-                                    <th className="font-semibold pb-2">Item Code / Name</th>
-                                    <th className="font-semibold pb-2 text-left">Barcode</th>
-                                    <th className="font-semibold pb-2 text-right">Qty</th>
-                                    <th className="font-semibold pb-2 text-right">Price</th>
-                                    <th className="font-semibold pb-2 text-right">Total</th>
+                                <tr className="text-xs text-slate-400 uppercase text-left" style={{ color: '#4285F4' }}>
+                                    <th className="font-semibold pb-2">รหัสสินค้า / ชื่อ</th>
+                                    <th className="font-semibold pb-2 text-left">บาร์โค้ด</th>
+                                    <th className="font-semibold pb-2 text-right">จำนวน</th>
+                                    <th className="font-semibold pb-2 text-right">ราคา</th>
+                                    <th className="font-semibold pb-2 text-right">รวม</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -117,7 +117,7 @@ const DailyReport = () => {
                                                 <span className="text-xs text-slate-400">-</span>
                                             )}
                                         </td>
-                                        <td className={`py-2 text-right ${item.qty > 1 ? 'text-red-700 font-extrabold text-lg' : 'text-slate-600 font-medium'}`}>
+                                        <td className={`py-2 text-right font-bold ${item.qty > 1 ? 'text-red-700 text-lg' : 'text-slate-600'}`}>
                                             {item.qty}
                                         </td>
                                         <td className="py-2 text-right text-slate-600">
@@ -136,10 +136,10 @@ const DailyReport = () => {
 
             <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm text-slate-600 flex items-center justify-between">
                 <div>
-                    สรุปจำนวนบิล: <span className="font-bold text-slate-800">{bills.length}</span> | ยอดรวมเงิน:{' '}
-                    <span className="font-bold text-slate-800">{totalAmount.toLocaleString()} THB</span> | ยอดรับชำระ:{' '}
-                    <span className="font-bold text-slate-800">{totalReceived.toLocaleString()} THB</span> | เงินทอน:{' '}
-                    <span className="font-bold text-slate-800">{totalChange.toLocaleString()} THB</span>
+                    <span className="font-bold">รวมบิล:</span> <span className="text-slate-800">{bills.length}</span> |{' '}
+                    <span className="font-bold">ยอดรวม:</span> <span className="text-slate-800">{totalAmount.toLocaleString()} THB</span> |{' '}
+                    <span className="font-bold">ยอดรับ:</span> <span className="text-slate-800">{totalReceived.toLocaleString()} THB</span> |{' '}
+                    <span className="font-bold">เงินทอน:</span> <span className="text-slate-800">{totalChange.toLocaleString()} THB</span>
                 </div>
                 <div className="text-slate-500 font-medium">สิ้นสุดบิลวันที่ {reportDate}</div>
             </div>

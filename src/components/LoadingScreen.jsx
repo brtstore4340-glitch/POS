@@ -11,54 +11,88 @@ const LoadingScreen = ({ isLoading, progress }) => {
                     transition={{ duration: 0.8, ease: "easeInOut" }}
                     className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white"
                 >
-                    {/* Gemini Spark */}
-                    <div className="relative flex items-center justify-center">
+                    {/* Brand Logo - Top */}
+                    <motion.div
+                        className="absolute top-8 left-8 flex items-center gap-2"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.6 }}
+                    >
+                        <img
+                            src="https://store.boots.co.th/images/boots-logo.png"
+                            alt="Boots"
+                            className="h-8 w-auto"
+                        />
+                        <div className="text-sm font-bold text-slate-700">BOOTS POS</div>
+                    </motion.div>
+
+                    {/* Gemini Spark - 4-pointed star with gradient purple-blue */}
+                    <div className="relative flex items-center justify-center mb-8">
+                        {/* Center Core */}
                         <motion.div
-                            className="w-16 h-8 rounded-full bg-linear-to-r from-blue-600 to-sky-400"
+                            className="absolute w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 via-blue-500 to-cyan-400"
                             animate={{
-                                scale: [1, 1.15, 1],
-                                opacity: [0.75, 1, 0.75],
-                                boxShadow: [
-                                    "0 0 0 0px rgba(59, 130, 246, 0.25)",
-                                    "0 0 0 12px rgba(59, 130, 246, 0)",
-                                    "0 0 0 0px rgba(59, 130, 246, 0.25)"
-                                ]
+                                scale: [1, 1.2, 1],
+                                opacity: [0.8, 1, 0.8],
                             }}
                             transition={{
-                                duration: 2.2,
+                                duration: 1.8,
                                 repeat: Infinity,
                                 ease: "easeInOut"
                             }}
                         />
-                        {[0, 1, 2].map((spark) => (
-                            <motion.span
-                                key={spark}
-                                className="absolute h-2 w-2 rounded-full bg-sky-400"
+
+                        {/* 4 Sparks at cardinal points */}
+                        {[0, 90, 180, 270].map((angle) => (
+                            <motion.div
+                                key={angle}
+                                className="absolute w-3 h-3 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"
+                                style={{
+                                    transformOrigin: '0 0',
+                                }}
                                 animate={{
-                                    y: [-6, -18, -6],
-                                    x: [spark * 6 - 6, spark * 10 - 10, spark * 6 - 6],
-                                    opacity: [0, 1, 0]
+                                    x: Math.cos(angle * Math.PI / 180) * 24,
+                                    y: Math.sin(angle * Math.PI / 180) * 24,
+                                    scale: [0.3, 1, 0.3],
+                                    opacity: [0, 1, 0],
                                 }}
                                 transition={{
-                                    duration: 1.6,
-                                    delay: spark * 0.3,
+                                    duration: 1.4,
+                                    delay: angle / 180 * 0.2,
                                     repeat: Infinity,
                                     ease: "easeInOut"
                                 }}
                             />
                         ))}
+
+                        {/* Outer Pulse Ring */}
+                        <motion.div
+                            className="absolute w-20 h-20 border-2 border-transparent rounded-full"
+                            style={{
+                                borderImage: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%) 1',
+                            }}
+                            animate={{
+                                scale: [1, 1.4, 1],
+                                opacity: [1, 0.2, 1],
+                            }}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        />
                     </div>
 
                     {/* Progress Text */}
                     <motion.div
-                        className="mt-8 font-mono text-2xl font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-600 to-sky-400"
+                        className="mt-8 font-mono text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-400"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                     >
                         {progress}%
                     </motion.div>
 
-                    <p className="mt-2 text-slate-400 text-sm">Synchronizing Data...</p>
+                    <p className="mt-3 text-slate-400 text-sm font-medium">กำลังโหลดข้อมูล...</p>
                 </motion.div>
             )}
         </AnimatePresence>
