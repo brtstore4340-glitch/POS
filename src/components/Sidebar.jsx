@@ -35,7 +35,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const displayName = user?.displayName || user?.email?.split('@')[0] || 'Employee';
 
     return (
-        <aside className="hidden h-screen w-64 flex-col border-r border-slate-200 bg-white md:flex text-slate-900">
+        <aside className="hidden h-screen w-64 flex-col border-l border-slate-200 bg-white md:flex md:order-last text-slate-900">
             {/* Logo */}
             <div className="flex h-16 items-center px-6 border-b border-slate-100">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
