@@ -1,0 +1,136 @@
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import {
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+    updatePassword
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
+
+const AuthContext = createContext();
+
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
+    const [role, setRole] = useState(null); // 'admin' | 'user'
+    const [loading, setLoading] = useState(true);
+    const [mustChangePassword, setMustChangePassword] = useState(false);
+
+    // Auto-logout Timer
+    const logoutTimerRef = useRef(null);
+    const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes
+
+    // Helper: Convert Employee ID to Synthetic Email
+    const getEmailFromId = (employeeId) => `${employeeId}@boots-pos.local`;
+
+    const login = async (employeeId, password) => {
+        const email = getEmailFromId(employeeId);
+        try {
+            const result = await signInWithEmailAndPassword(auth, email, password);
+            return result;
+        } catch (error) {
+            throw error;
+        }
+    };
+
+    const logout = async () => {
+        try {
+            await signOut(auth);
+            setUser(null);
+            setRole(null);
+            clearTimeout(logoutTimerRef.current);
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
+
+    const changeFirstTimePassword = async (newPassword) => {
+        if (!auth.currentUser) throw new Error("No user logged in");
+
+        await updatePassword(auth.currentUser, newPassword);
+
+        // Update Firestore to indicate password has been changed
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await setDoc(userRef, { mustChangePassword: false }, { merge: true });
+
+        setMustChangePassword(false);
+    };
+
+    // Auto-logout Logic
+    const resetTimer = () => {
+        if (!user) return;
+        if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+
+        logoutTimerRef.current = setTimeout(() => {
+            console.log("Auto-logout due to inactivity");
+            logout();
+        }, INACTIVITY_LIMIT);
+    };
+
+    useEffect(() => {
+        // Listen for activity
+        const events = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+        const handleActivity = () => resetTimer();
+
+        if (user) {
+            events.forEach(event => window.addEventListener(event, handleActivity));
+            resetTimer(); // Start timer on login
+        }
+
+        return () => {
+            events.forEach(event => window.removeEventListener(event, handleActivity));
+            if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        };
+    }, [user]);
+
+    // Auth State Observer
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser) {
+                // User is signed in, fetch Role from Firestore
+                try {
+                    const userDocRef = doc(db, 'users', currentUser.uid);
+                    const userDoc = await getDoc(userDocRef);
+
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setRole(userData.role || 'user');
+                        setMustChangePassword(userData.mustChangePassword === true);
+                    } else {
+                        // Fallback if user doc missing (e.g. just created in Auth but not Firestore)
+                        setRole('user');
+                    }
+                } catch (err) {
+                    console.error("Error fetching user role:", err);
+                    setRole('user');
+                }
+                setUser(currentUser);
+            } else {
+                setUser(null);
+                setRole(null);
+            }
+            setLoading(false);
+        });
+
+        return unsubscribe;
+    }, []);
+
+    const value = {
+        user,
+        role,
+        loading,
+        mustChangePassword,
+        login,
+        logout,
+        changeFirstTimePassword,
+        isAdmin: role === 'admin'
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {!loading && children}
+        </AuthContext.Provider>
+    );
+};
