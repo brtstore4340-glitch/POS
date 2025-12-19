@@ -197,7 +197,6 @@ const PosTerminal = () => {
                             }}
                             className="w-full h-12 md:h-14 pl-10 md:pl-12 pr-4 rounded-lg md:rounded-xl border-2 text-base md:text-lg font-semibold shadow-sm focus:outline-none transition-all"
                             style={{
-                                borderColor: '#e8e8e8',
                                 boxShadow: billStep === 'scanning' ? '0 0 0 4px rgba(66, 133, 244, 0.1)' : 'none',
                                 borderColor: billStep === 'scanning' ? '#4285F4' : '#e8e8e8'
                             }}
