@@ -11,6 +11,7 @@ const PosTerminal = () => {
         productList,
         startNewBill,
         cancelBill,
+        billStep,
         setBillStep
     } = usePos();
 
