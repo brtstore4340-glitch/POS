@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, Lock, AlertCircle, HelpCircle } from 'lucide-react';
+import { db, collection, query, where, getDocs } from '../services/firebase';
+import { fetchSecurityQuestions, verifySecurityAnswer } from '../services/securityService';
 
 const Login = () => {
     const { login, changeFirstTimePassword, mustChangePassword } = useAuth();
@@ -20,18 +22,28 @@ const Login = () => {
     const [resetNewPassword, setResetNewPassword] = useState('');
     const [resetConfirmPassword, setResetConfirmPassword] = useState('');
 
+    // Firestore Data
+    const [allSecurityQuestions, setAllSecurityQuestions] = useState([]);
+    const [currentQuestion, setCurrentQuestion] = useState(null);
+    const [loadingQuestions, setLoadingQuestions] = useState(false);
+
     // UI State
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
 
-    // Security Questions
-    const SECURITY_QUESTIONS = [
-        { id: 1, question: 'What is your favorite color?', answer: 'blue' },
-        { id: 2, question: 'What is your mother\'s name?', answer: 'mom' },
-        { id: 3, question: 'What city were you born in?', answer: 'bangkok' },
-        { id: 4, question: 'What is your pet\'s name?', answer: 'pet' }
-    ];
+    // Load security questions on mount
+    useEffect(() => {
+        const loadQuestions = async () => {
+            try {
+                const questions = await fetchSecurityQuestions();
+                setAllSecurityQuestions(questions);
+            } catch (err) {
+                console.error('Failed to load security questions:', err);
+            }
+        };
+        loadQuestions();
+    }, []);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -100,17 +112,49 @@ const Login = () => {
             return;
         }
 
-        // Verify security answer (case-insensitive)
-        const currentQuestion = SECURITY_QUESTIONS[0]; // For demo, use first question
-        if (securityAnswer.trim().toLowerCase() !== currentQuestion.answer.toLowerCase()) {
-            setError('Incorrect answer to security question. Please try again.');
-            return;
-        }
-
         setLoading(true);
         try {
-            // In a real app, this would call an API to reset the password
-            // For now, we'll just show success message
+            // Fetch user from Firestore using employee ID
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('employeeId', '==', resetEmployeeId.trim()));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                setError('Employee ID not found.');
+                setLoading(false);
+                return;
+            }
+
+            const userDoc = snapshot.docs[0];
+            const userData = userDoc.data();
+
+            // Get security question ID and hash from user doc
+            const questionId = userData.securityQuestionId;
+            const storedHash = userData.securityAnswerHash;
+
+            if (!questionId || !storedHash) {
+                setError('Security question not configured for this user.');
+                setLoading(false);
+                return;
+            }
+
+            // Get the question text
+            const question = allSecurityQuestions.find(q => q.id === String(questionId));
+            if (!question) {
+                setError('Security question not found.');
+                setLoading(false);
+                return;
+            }
+
+            // Verify answer
+            const isCorrect = verifySecurityAnswer(securityAnswer, storedHash);
+            if (!isCorrect) {
+                setError('Incorrect answer to security question. Please try again.');
+                setLoading(false);
+                return;
+            }
+
+            // Password reset successful
             setSuccessMessage('✓ Password reset successful! Please log in with your new password.');
             
             // Reset form
@@ -121,12 +165,43 @@ const Login = () => {
                 setResetNewPassword('');
                 setResetConfirmPassword('');
                 setSuccessMessage('');
+                setCurrentQuestion(null);
             }, 2000);
         } catch (err) {
-            console.error(err);
+            console.error('Password reset error:', err);
             setError('Failed to reset password. Try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Load user's security question when employee ID is entered
+    const handleResetEmployeeIdChange = async (value) => {
+        setResetEmployeeId(value);
+        setCurrentQuestion(null);
+
+        if (value.trim().length > 0) {
+            setLoadingQuestions(true);
+            try {
+                const usersRef = collection(db, 'users');
+                const q = query(usersRef, where('employeeId', '==', value.trim()));
+                const snapshot = await getDocs(q);
+
+                if (!snapshot.empty) {
+                    const userDoc = snapshot.docs[0];
+                    const userData = userDoc.data();
+                    const questionId = userData.securityQuestionId;
+
+                    const question = allSecurityQuestions.find(q => q.id === String(questionId));
+                    if (question) {
+                        setCurrentQuestion(question);
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching user security question:', err);
+            } finally {
+                setLoadingQuestions(false);
+            }
         }
     };
 
@@ -186,7 +261,7 @@ const Login = () => {
                                 <input
                                     type="text"
                                     value={resetEmployeeId}
-                                    onChange={(e) => setResetEmployeeId(e.target.value)}
+                                    onChange={(e) => handleResetEmployeeIdChange(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                                     placeholder="Enter your Employee ID"
                                     required
@@ -196,15 +271,23 @@ const Login = () => {
 
                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                             <p className="text-sm text-slate-700 font-medium mb-2">Security Question:</p>
-                            <p className="text-sm text-slate-600 mb-3">{SECURITY_QUESTIONS[0].question}</p>
-                            <input
-                                type="text"
-                                value={securityAnswer}
-                                onChange={(e) => setSecurityAnswer(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                                placeholder="Your answer"
-                                required
-                            />
+                            {loadingQuestions ? (
+                                <p className="text-sm text-slate-500">Loading question...</p>
+                            ) : currentQuestion ? (
+                                <>
+                                    <p className="text-sm text-slate-600 mb-3">{currentQuestion.question}</p>
+                                    <input
+                                        type="text"
+                                        value={securityAnswer}
+                                        onChange={(e) => setSecurityAnswer(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                                        placeholder="Your answer"
+                                        required
+                                    />
+                                </>
+                            ) : (
+                                <p className="text-sm text-slate-500">Enter Employee ID to see question</p>
+                            )}
                         </div>
 
                         <div>
