@@ -11,7 +11,9 @@ const PosTerminal = () => {
         productList,
         startNewBill,
         cancelBill,
-        setBillStep
+        billStep,
+        setBillStep,
+        billStep
     } = usePos();
 
     // Local UI State
