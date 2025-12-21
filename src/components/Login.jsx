@@ -1,483 +1,167 @@
+// Login Page Component
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { User, Lock, AlertCircle, HelpCircle } from 'lucide-react';
-import { db, collection, query, where, getDocs } from '../services/firebase';
-import { fetchSecurityQuestions, verifySecurityAnswer } from '../services/securityService';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card } from '../components/ui/Card';
+import { Alert } from '../components/ui/Alert';
 
-const Login = () => {
-    const { login, changeFirstTimePassword, mustChangePassword } = useAuth();
-
-    // Login State
-    const [employeeId, setEmployeeId] = useState('');
-    const [password, setPassword] = useState('');
-
-    // Change Password State
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-
-    // Reset Password State
-    const [showResetModal, setShowResetModal] = useState(false);
-    const [resetEmployeeId, setResetEmployeeId] = useState('');
-    const [securityAnswer, setSecurityAnswer] = useState('');
-    const [resetNewPassword, setResetNewPassword] = useState('');
-    const [resetConfirmPassword, setResetConfirmPassword] = useState('');
-
-    // Firestore Data
-    const [allSecurityQuestions, setAllSecurityQuestions] = useState([]);
-    const [currentQuestion, setCurrentQuestion] = useState(null);
-    const [loadingQuestions, setLoadingQuestions] = useState(false);
-
-    // UI State
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
-
-    // Load security questions on mount
-    useEffect(() => {
-        const loadQuestions = async () => {
-            try {
-                const questions = await fetchSecurityQuestions();
-                setAllSecurityQuestions(questions);
-            } catch (err) {
-                console.error('Failed to load security questions:', err);
-            }
-        };
-        loadQuestions();
-    }, []);
-
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            await login(employeeId, password);
-        } catch (err) {
-            console.error(err);
-            setError('Failed to login. Please check Employee ID and Password.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleChangePassword = async (e) => {
-        e.preventDefault();
-        setError('');
-
-        // Validation
-        if (newPassword.length < 6) {
-            setError('Password must be at least 6 characters.');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            setError('Passwords do not match.');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            await changeFirstTimePassword(newPassword);
-            // Success will automatically update auth state in context
-        } catch (err) {
-            console.error(err);
-            setError('Failed to update password. Try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResetPassword = async (e) => {
-        e.preventDefault();
-        setError('');
-        setSuccessMessage('');
-
-        // Validation
-        if (!resetEmployeeId.trim()) {
-            setError('Please enter Employee ID.');
-            return;
-        }
-
-        if (!securityAnswer.trim()) {
-            setError('Please answer the security question.');
-            return;
-        }
-
-        if (resetNewPassword.length < 6) {
-            setError('Password must be at least 6 characters.');
-            return;
-        }
-
-        if (resetNewPassword !== resetConfirmPassword) {
-            setError('Passwords do not match.');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            // Fetch user from Firestore using employee ID
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('employeeId', '==', resetEmployeeId.trim()));
-            const snapshot = await getDocs(q);
-
-            if (snapshot.empty) {
-                setError('Employee ID not found.');
-                setLoading(false);
-                return;
-            }
-
-            const userDoc = snapshot.docs[0];
-            const userData = userDoc.data();
-
-            // Get security question ID and hash from user doc
-            const questionId = userData.securityQuestionId;
-            const storedHash = userData.securityAnswerHash;
-
-            if (!questionId || !storedHash) {
-                setError('Security question not configured for this user.');
-                setLoading(false);
-                return;
-            }
-
-            // Get the question text
-            const question = allSecurityQuestions.find(q => q.id === String(questionId));
-            if (!question) {
-                setError('Security question not found.');
-                setLoading(false);
-                return;
-            }
-
-            // Verify answer (now async)
-            const isCorrect = await verifySecurityAnswer(securityAnswer, storedHash);
-            if (!isCorrect) {
-                setError('Incorrect answer to security question. Please try again.');
-                setLoading(false);
-                return;
-            }
-
-            // Password reset successful
-            setSuccessMessage('✓ Password reset successful! Please log in with your new password.');
-
-            // Reset form
-            setTimeout(() => {
-                setShowResetModal(false);
-                setResetEmployeeId('');
-                setSecurityAnswer('');
-                setResetNewPassword('');
-                setResetConfirmPassword('');
-                setSuccessMessage('');
-                setCurrentQuestion(null);
-            }, 2000);
-        } catch (err) {
-            console.error('Password reset error:', err);
-            setError('Failed to reset password. Try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Load user's security question when employee ID is entered
-    const handleResetEmployeeIdChange = async (value) => {
-        setResetEmployeeId(value);
-        setCurrentQuestion(null);
-
-        if (value.trim().length > 0) {
-            setLoadingQuestions(true);
-            try {
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('employeeId', '==', value.trim()));
-                const snapshot = await getDocs(q);
-
-                if (!snapshot.empty) {
-                    const userDoc = snapshot.docs[0];
-                    const userData = userDoc.data();
-                    const questionId = userData.securityQuestionId;
-
-                    const question = allSecurityQuestions.find(q => q.id === String(questionId));
-                    if (question) {
-                        setCurrentQuestion(question);
-                    }
-                }
-            } catch (err) {
-                console.error('Error fetching user security question:', err);
-            } finally {
-                setLoadingQuestions(false);
-            }
-        }
-    };
-
-
-
-    // 1. Initial Password Change View
-    // We check mustChangePassword from context (which is populated after successful login)
-    // BUT the App router usually redirects. 
-    // Wait, if mustChangePassword is TRUE, we should likely block access to the rest of the app.
-    // This Logic is best handled inside App.jsx or here. 
-    // Assuming App.jsx renders <Login /> if !user.
-    // If user && mustChangePassword, we might still want to show this screen overlaid or as a dedicated route.
-    // For simplicity, let's assume this component handles BOTH the initial login AND the "Change Password" 
-    // state if it's rendered. Ideally, App.jsx controls this.
-
-    // However, `login` function sets the user. 
-    // If the user IS logged in but `mustChangePassword` is true, 
-    // App.jsx will likely need to pass a prop or render this component specifically.
-    // Let's design this component to be reusable for both:
-    // - Mode "login" (default)
-    // - Mode "change_password" (passed via prop or determined by context if we are already logged in)
-
-    // Actually, if we are NOT logged in, we show Login form.
-    // If we ARE logged in but `mustChangePassword` is true, we show Change Password form.
-
-    const { user } = useAuth();
-
-    // Reset Password Modal
-    if (showResetModal) {
-        return (
-            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-                    <div className="text-center mb-8">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <HelpCircle className="w-6 h-6 text-amber-600" />
-                        </div>
-                        <h1 className="text-2xl font-bold text-slate-900">Reset Password</h1>
-                        <p className="text-slate-500 mt-2 text-sm">Answer security question to reset password</p>
-                    </div>
-
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-center gap-3 text-red-600 text-sm">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            {error}
-                        </div>
-                    )}
-
-                    {successMessage && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-lg flex items-center gap-3 text-green-600 text-sm">
-                            {successMessage}
-                        </div>
-                    )}
-
-                    <form onSubmit={handleResetPassword} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Employee ID</label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    value={resetEmployeeId}
-                                    onChange={(e) => handleResetEmployeeIdChange(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                                    placeholder="Enter your Employee ID"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        {currentQuestion && (
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <p className="text-sm text-slate-700 font-medium mb-2">Security Question:</p>
-                                <p className="text-sm text-slate-600 mb-3">{currentQuestion.question}</p>
-                                <input
-                                    type="text"
-                                    value={securityAnswer}
-                                    onChange={(e) => setSecurityAnswer(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                                    placeholder="Your answer"
-                                    required
-                                />
-                            </div>
-                        )}
-
-                        {loadingQuestions && (
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
-                                <p className="text-sm text-slate-500">Loading security question...</p>
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">New Password (Min 6 chars)</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="password"
-                                    value={resetNewPassword}
-                                    onChange={(e) => setResetNewPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                                    placeholder="New password"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="password"
-                                    value={resetConfirmPassword}
-                                    onChange={(e) => setResetConfirmPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                                    placeholder="Confirm password"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowResetModal(false)}
-                                className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg transition-all text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                            >
-                                {loading ? 'Resetting...' : 'Reset Password'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        );
+export default function Login() {
+  const [formData, setFormData] = useState({
+    employeeId: '',
+    password: ''
+  });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  
+  const { login, currentUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      const from = location.state?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
     }
+  }, [currentUser, navigate, location]);
 
-    if (user && mustChangePassword) {
-        return (
-            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-                    <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold text-slate-900">Setup New Password</h1>
-                        <p className="text-slate-500 mt-2">First time login requires a password change.</p>
-                    </div>
-
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-center gap-3 text-red-600 text-sm">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            {error}
-                        </div>
-                    )}
-
-                    <form onSubmit={handleChangePassword} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">New Password (Min 6 chars)</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    placeholder="Enter new password"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Confirm New Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    placeholder="Confirm new password"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Updating...' : 'Update Password'}
-                        </button>
-                    </form>
-                </div>
-            </div>
-        );
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.employeeId.trim()) {
+      newErrors.employeeId = 'Employee ID is required';
     }
-
-    // Fallback: If logged in & no pswd change needed, we shouldn't be here (App.jsx handles redirect).
-    // But if we are NOT logged in:
-    if (!user) {
-        return (
-            <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-                    <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/20">
-                            <span className="text-2xl font-bold text-white">B</span>
-                        </div>
-                        <h1 className="text-2xl font-bold text-slate-900">Boots POS Login</h1>
-                        <p className="text-slate-500 mt-2">Enter your Employee ID to continue</p>
-                    </div>
-
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg flex items-center gap-3 text-red-600 text-sm">
-                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                            {error}
-                        </div>
-                    )}
-
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Employee ID</label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    value={employeeId}
-                                    onChange={(e) => setEmployeeId(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    placeholder="e.g. 6705067"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    placeholder="Enter password"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Signing in...' : 'Sign In'}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setShowResetModal(true)}
-                            className="w-full py-2 text-center text-blue-600 hover:text-blue-700 font-medium text-sm transition-all"
-                        >
-                            Forgot Password?
-                        </button>
-                    </form>
-                </div>
-            </div>
-        );
+    
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
     }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-    return null; // Should not reach here
-};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setLoading(true);
+    setMessage('');
+    setErrors({});
+    
+    try {
+      const email = `${formData.employeeId}@boots-pos.local`;
+      await login(email, formData.password);
+      
+      // Check if password change is required
+      const from = location.state?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      
+      switch (error.code) {
+        case 'auth/user-not-found':
+          setErrors({ employeeId: 'Invalid employee ID' });
+          break;
+        case 'auth/wrong-password':
+          setErrors({ password: 'Incorrect password' });
+          break;
+        case 'auth/too-many-requests':
+          setMessage('Too many failed attempts. Please try again later.');
+          break;
+        default:
+          setMessage('Failed to login. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-export default Login;
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear error when user types
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Enter your employee credentials
+          </p>
+        </div>
+        
+        {message && (
+          <Alert variant="error" message={message} />
+        )}
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700">
+                Employee ID
+              </label>
+              <Input
+                id="employeeId"
+                name="employeeId"
+                type="text"
+                value={formData.employeeId}
+                onChange={handleChange}
+                error={errors.employeeId}
+                disabled={loading}
+                placeholder="Enter your employee ID"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                value={formData.password}
+                onChange={handleChange}
+                error={errors.password}
+                disabled={loading}
+                placeholder="Enter your password"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Button
+              type="submit"
+              loading={loading}
+              className="w-full"
+              disabled={loading}
+            >
+              Sign in
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
