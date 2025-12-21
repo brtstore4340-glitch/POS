@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { usePos } from '../contexts/PosContext';
+import { usePos } from '../context/PosContext';
 import { Scan, Trash2, Box, X } from 'lucide-react';
 
 const PosTerminal = () => {

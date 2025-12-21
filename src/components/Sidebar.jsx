@@ -1,90 +1,63 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, BarChart3, Settings, LogOut } from 'lucide-react';
 
 const Sidebar = ({ currentView, onViewChange }) => {
     const { user, role, logout } = useAuth();
 
     const menuItems = [
-        {
-            icon: LayoutDashboard,
-            label: 'แดชบอร์ด',
-            id: 'dashboard',
-            allowed: ['admin', 'user']
-        },
-        {
-            icon: BarChart3,
-            label: 'รายงาน',
-            id: 'reporting',
-            allowed: ['admin', 'user'] // User can see reports
-        },
-        {
-            icon: Settings,
-            label: 'ตั้งค่า',
-            id: 'settings',
-            allowed: ['admin'] // Admin ONLY
-        },
+        { id: 'dashboard', icon: LayoutDashboard, label: 'ขายหน้าร้าน', allowed: ['admin', 'user'] },
+        { id: 'reporting', icon: BarChart3, label: 'รายงาน', allowed: ['admin'] },
+        { id: 'settings', icon: Settings, label: 'ตั้งค่า', allowed: ['admin'] },
     ];
 
-    // Filter items based on current role
-    const filteredItems = menuItems.filter(item => item.allowed.includes(role));
-
-    // Get display name (using employee Id or name if we had it in context, 
-    // current AuthContext only exposes user object. 
-    // Let's us basic ID for now or just "Employee")
-    const displayName = user?.displayName || user?.email?.split('@')[0] || 'พนักงาน';
-
     return (
-        <aside className="hidden h-screen w-64 flex-col border-r border-slate-200 bg-white md:flex text-slate-900">
-            {/* Logo */}
-            <div className="flex h-16 items-center justify-center px-6 border-b border-slate-100">
-                <img src="https://store.boots.co.th/images/boots-logo.png" alt="Boots Logo" className="h-8 object-contain" />
+        <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-full shrink-0">
+            <div className="h-16 flex items-center justify-center border-b border-slate-100">
+                <h1 className="text-xl font-bold text-blue-600 tracking-tight">BOOTS <span className="text-slate-800">POS</span></h1>
             </div>
 
-            {/* Menu */}
-            <nav className="flex-1 space-y-1 px-3 py-4">
-                {filteredItems.map((item) => (
-                    <button
-                        key={item.id}
-                        onClick={() => onViewChange(item.id)}
-                        className={`w-full group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${currentView === item.id
-                            ? 'text-white'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            <nav className="flex-1 p-4 space-y-2">
+                {menuItems.map((item) => {
+                    // Simple role check
+                    if (role !== 'admin' && !item.allowed.includes('user')) return null;
+
+                    const isActive = currentView === item.id;
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => onViewChange(item.id)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${
+                                isActive 
+                                ? 'bg-blue-50 text-blue-600 shadow-sm' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                             }`}
-                        style={{
-                            backgroundColor: currentView === item.id ? '#4285F4' : 'transparent'
-                        }}
-                    >
-                        <item.icon
-                            className={`mr-3 h-5 w-5 flex-shrink-0 ${currentView === item.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-500'
-                                }`}
-                        />
-                        {item.label}
-                    </button>
-                ))}
+                        >
+                            <item.icon size={20} />
+                            {item.label}
+                        </button>
+                    );
+                })}
             </nav>
 
-            {/* Profile */}
-            <div className="border-t border-slate-200 p-4">
-                <div className="flex items-center">
-                    <div className="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 overflow-hidden">
-                        {displayName.substring(0, 2).toUpperCase()}
+            <div className="p-4 border-t border-slate-100">
+                <div className="flex items-center gap-3 mb-4 px-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                        {user?.email?.charAt(0).toUpperCase() || 'U'}
                     </div>
-                    <div className="ml-3 overflow-hidden">
-                        <p className="text-sm font-medium truncate w-24">{displayName}</p>
-                        <p className="text-xs text-slate-500 capitalize">{role}</p>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{user?.email?.split('@')[0]}</p>
+                        <p className="text-xs text-slate-500 capitalize">{role || 'user'}</p>
                     </div>
-                    <button
-                        onClick={logout}
-                        className="ml-auto text-slate-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-slate-50"
-                        title="ออกจากระบบ"
-                    >
-                        <LogOut size={18} />
-                    </button>
                 </div>
+                <button 
+                    onClick={logout}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                >
+                    <LogOut size={16} /> ออกจากระบบ
+                </button>
             </div>
         </aside>
     );
 };
-
 export default Sidebar;

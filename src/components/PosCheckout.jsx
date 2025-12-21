@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { usePos } from '../contexts/PosContext';
+import { usePos } from '../context/PosContext';
 import { CreditCard, Banknote } from 'lucide-react';
 
 const PosCheckout = () => {
