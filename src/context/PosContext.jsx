@@ -1,264 +1,261 @@
-﻿import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
-import { db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { calculatePrice } from '../features/pricing';
-import { PRODUCT_STORAGE_KEYS } from '../services/dataService';
-import LoadingScreen from '../components/ui/LoadingScreen';
-import MaintenanceMode from '../components/MaintenanceMode';
+﻿import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { db } from "../service/firebase.js";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import LoadingScreen from "../components/ui/LoadingScreen.jsx";
 
-const PosContext = createContext();
+// ✅ keys ขั้นต่ำ (กันพังถ้า dataService ยังไม่มี)
+const PRODUCT_STORAGE_KEYS = {
+  itemExport: "pos_item_export",
+  billSeq: "pos_bill_seq",
+};
 
+// ✅ pricing ขั้นต่ำ (กันพังถ้า features/pricing ยังไม่มี)
+function calculatePrice(product, qty) {
+  const unitPrice = Number(product?.dealPrice || product?.price || 0);
+  const total = unitPrice * Number(qty || 0);
+  return { unitPrice, total, discount: 0 };
+}
+
+const PosContext = createContext(null);
 export const usePos = () => useContext(PosContext);
 
-export const PosProvider = ({ children }) => {
-    // --- Master Data State ---
-    const [products, setProducts] = useState({});
-    const [productList, setProductList] = useState([]);
-    const [loadingProducts, setLoadingProducts] = useState(true);
-    const [loadingProgress, setLoadingProgress] = useState(0);
-    const [error, setError] = useState(null);
+export function PosProvider({ children }) {
+  // --- Master Data ---
+  const [products, setProducts] = useState({});
+  const [productList, setProductList] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [error, setError] = useState(null);
 
-    // --- Transaction State ---
-    const [billId, setBillId] = useState('');
-    const [cart, setCart] = useState([]); 
-    const [billStep, setBillStep] = useState('scanning'); 
-    
-    // เนเธเน Ref เน€เธเธทเนเธญเธเนเธญเธเธเธฑเธเธเธฒเธฃ Re-render เนเธฅเธฐเน€เธเนเธ Sequence
-    const billSequenceRef = useRef({ stamp: '', seq: 0 });
+  // --- Transaction ---
+  const [billId, setBillId] = useState("");
+  const [cart, setCart] = useState([]);
+  const [billStep, setBillStep] = useState("scanning");
 
-    // --- Initialization ---
-    useEffect(() => {
-        // 1. Load Bill Sequence from LocalStorage (เน€เธเธทเนเธญเนเธกเนเนเธซเนเน€เธฅเธเธเธดเธฅเธเนเธณเน€เธกเธทเนเธญ Refresh)
-        const savedSeq = localStorage.getItem(PRODUCT_STORAGE_KEYS.billSeq);
-        if (savedSeq) {
-            try {
-                billSequenceRef.current = JSON.parse(savedSeq);
-            } catch (e) { console.error("Invalid seq storage"); }
+  const billSequenceRef = useRef({ stamp: "", seq: 0 });
+
+  useEffect(() => {
+    // 1) Load Bill Seq (กันเลขบิลซ้ำตอน refresh)
+    const savedSeq = localStorage.getItem(PRODUCT_STORAGE_KEYS.billSeq);
+    if (savedSeq) {
+      try {
+        billSequenceRef.current = JSON.parse(savedSeq);
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2) Load Products from localStorage
+    const loaded = loadFromStorage();
+    if (!loaded) {
+      setLoadingProducts(false);
+    } else {
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 20;
+        setLoadingProgress(progress);
+        if (progress >= 100) {
+          clearInterval(interval);
+          setLoadingProducts(false);
         }
+      }, 80);
+    }
 
-        // 2. Load Products
-        const loaded = loadFromStorage();
-        if (!loaded) {
-            setLoadingProducts(false);
-        } else {
-             // Fake Loading for better UX
-             let progress = 0;
-             const interval = setInterval(() => {
-                 progress += 20;
-                 setLoadingProgress(progress);
-                 if(progress >= 100) {
-                     clearInterval(interval);
-                     setLoadingProducts(false);
-                 }
-             }, 100);
-        }
-        
-        generateBillId(); // Gen เธเธฃเธฑเนเธเนเธฃเธ
+    generateBillId();
 
-        // Listen to storage events (Cross-tab or same-tab updates)
-        const handleStorageUpdate = () => loadFromStorage();
-        window.addEventListener('pos-products-updated', handleStorageUpdate);
-        return () => window.removeEventListener('pos-products-updated', handleStorageUpdate);
-    }, []);
+    const handleStorageUpdate = () => loadFromStorage();
+    window.addEventListener("pos-products-updated", handleStorageUpdate);
+    return () => window.removeEventListener("pos-products-updated", handleStorageUpdate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // --- Logic Functions ---
+  function buildProductState(items) {
+    const map = {};
+    const list = [];
+    const seen = new Set();
 
-    const buildProductState = (items) => {
-        const map = {};
-        const list = [];
-        const seen = new Set();
+    items.forEach((item) => {
+      const code = String(item.code || "").trim().toUpperCase();
+      const barcode = String(item.barcode || "").trim().toUpperCase();
+      if (!code && !barcode) return;
 
-        items.forEach((item) => {
-            const code = String(item.code || '').trim().toUpperCase();
-            const barcode = String(item.barcode || '').trim().toUpperCase();
-            
-            if (!code && !barcode) return;
+      const product = {
+        ...item,
+        code,
+        barcode,
+        name: item.name || "สินค้าไม่ระบุชื่อ",
+        price: Number(item.price) || 0,
+        dealPrice: Number(item.dealPrice) || 0,
+        method: Number(item.method) || 0,
+        searchString: `${code} ${barcode} ${item.name || ""}`.toLowerCase(),
+      };
 
-            // Safe Number Parsing
-            const product = {
-                ...item,
-                code,
-                barcode,
-                name: item.name || 'เธชเธดเธเธเนเธฒเนเธกเนเธฃเธฐเธเธธเธเธทเนเธญ',
-                price: parseFloat(item.price) || 0,
-                dealPrice: parseFloat(item.dealPrice) || 0,
-                method: parseInt(item.method) || 0,
-                // Pre-compute lowercase for search optimization
-                searchString: `${code} ${barcode} ${item.name || ''}`.toLowerCase()
-            };
+      if (code) map[code] = product;
+      if (barcode) map[barcode] = product;
 
-            if (code) map[code] = product;
-            if (barcode) map[barcode] = product;
+      const uniqueKey = code || barcode;
+      if (!seen.has(uniqueKey)) {
+        seen.add(uniqueKey);
+        list.push(product);
+      }
+    });
 
-            // Create Unique List for UI
-            const uniqueKey = code || barcode;
-            if (!seen.has(uniqueKey)) {
-                seen.add(uniqueKey);
-                list.push(product);
-            }
-        });
-        return { map, list };
-    };
+    return { map, list };
+  }
 
-    const loadFromStorage = () => {
-        try {
-            const storedItemExport = localStorage.getItem(PRODUCT_STORAGE_KEYS.itemExport);
-            if (!storedItemExport) return false;
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(PRODUCT_STORAGE_KEYS.itemExport);
+      if (!raw) return false;
 
-            const items = JSON.parse(storedItemExport);
-            if (Array.isArray(items) && items.length > 0) {
-                const { map, list } = buildProductState(items);
-                setProducts(map);
-                setProductList(list);
-                return true;
-            }
-        } catch (err) {
-            console.error('Failed to read local products', err);
-            setError(err);
-        }
-        return false;
-    };
-
-    const generateBillId = () => {
-        const now = new Date();
-        // Format: DDMMYYHHMM (10 digits)
-        const stamp = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-        
-        if (billSequenceRef.current.stamp === stamp) {
-            billSequenceRef.current.seq += 1;
-        } else {
-            billSequenceRef.current = { stamp, seq: 1 };
-        }
-        
-        // Save Sequence to storage to persist across refresh
-        localStorage.setItem(PRODUCT_STORAGE_KEYS.billSeq, JSON.stringify(billSequenceRef.current));
-
-        const seq = String(billSequenceRef.current.seq).padStart(2, '0');
-        setBillId(`${stamp}${seq}`);
-    };
-
-    const addItem = (inputCode, qty = 1) => {
-        const normalizedInput = String(inputCode || '').trim().toUpperCase();
-        if (!normalizedInput) return false;
-        
-        // Lookup O(1)
-        let product = products[normalizedInput];
-        
-        // Fallback search
-        if (!product) {
-             product = productList.find(p => p.code === normalizedInput || p.barcode === normalizedInput);
-        }
-        
-        if (!product) return false;
-
-        setCart(prevCart => {
-            const existingIdx = prevCart.findIndex(item => item.code === product.code);
-            const method = Number(product.method) || 0;
-            const currentQty = Number(qty);
-
-            if (existingIdx >= 0) {
-                const newCart = [...prevCart];
-                const oldItem = newCart[existingIdx];
-                const newQty = oldItem.qty + currentQty;
-                const pricing = calculatePrice(product, newQty, method);
-                
-                newCart[existingIdx] = { ...oldItem, ...pricing, qty: newQty };
-                return newCart;
-            } else {
-                const pricing = calculatePrice(product, currentQty, method);
-                return [...prevCart, { ...product, ...pricing, qty: currentQty, timestamp: null }];
-            }
-        });
+      const items = JSON.parse(raw);
+      if (Array.isArray(items) && items.length > 0) {
+        const { map, list } = buildProductState(items);
+        setProducts(map);
+        setProductList(list);
         return true;
-    };
+      }
+    } catch (err) {
+      console.error("Failed to read local products", err);
+      setError(err);
+    }
+    return false;
+  }
 
-    const removeItem = (index) => {
-        setCart(prev => prev.filter((_, i) => i !== index));
-    };
+  function generateBillId() {
+    const now = new Date();
+    const stamp =
+      `${String(now.getDate()).padStart(2, "0")}` +
+      `${String(now.getMonth() + 1).padStart(2, "0")}` +
+      `${String(now.getFullYear()).slice(-2)}` +
+      `${String(now.getHours()).padStart(2, "0")}` +
+      `${String(now.getMinutes()).padStart(2, "0")}`;
 
-    const clearBill = () => {
-        setCart([]);
-        setBillStep('scanning');
-        generateBillId(); 
-    };
+    if (billSequenceRef.current.stamp === stamp) {
+      billSequenceRef.current.seq += 1;
+    } else {
+      billSequenceRef.current = { stamp, seq: 1 };
+    }
 
-    // เนเธเน useMemo เธเธณเธเธงเธ“ Totals เน€เธเธทเนเธญ performance เธ—เธตเนเธ”เธตเธเธถเนเธ
-    const totals = useMemo(() => {
-        return cart.reduce((acc, item) => ({
-            subtotal: acc.subtotal + (item.unitPrice * item.qty),
-            totalDiscount: acc.totalDiscount + (item.discount || 0),
-            netTotal: acc.netTotal + item.total
-        }), { subtotal: 0, totalDiscount: 0, netTotal: 0 });
-    }, [cart]);
+    localStorage.setItem(PRODUCT_STORAGE_KEYS.billSeq, JSON.stringify(billSequenceRef.current));
+    const seq = String(billSequenceRef.current.seq).padStart(2, "0");
+    setBillId(`${stamp}${seq}`);
+  }
 
-    const finalizeBill = async (receivedAmount) => {
-        if (!cart.length) return null;
-        
-        const received = Number(receivedAmount) || 0;
-        const total = totals.netTotal;
-        const change = Math.max(0, received - total);
-        const timestamp = new Date();
+  function addItem(inputCode, qty = 1) {
+    const normalized = String(inputCode || "").trim().toUpperCase();
+    if (!normalized) return false;
 
-        const itemsToSave = cart.map((item) => ({
-            code: item.code,
-            name: item.name,
-            qty: item.qty,
-            price: item.unitPrice,
-            total: item.total,
-            savedAt: timestamp.toISOString(),
-            billNo: billId
-        }));
+    let product = products[normalized];
+    if (!product) {
+      product = productList.find((p) => p.code === normalized || p.barcode === normalized);
+    }
+    if (!product) return false;
 
-        try {
-            await addDoc(collection(db, 'bills'), {
-                billNo: billId,
-                items: itemsToSave,
-                summary: {
-                    subtotal: totals.subtotal,
-                    discount: totals.totalDiscount,
-                    total: total,
-                    received,
-                    change
-                },
-                timestamp: serverTimestamp(),
-                dateStr: timestamp.toLocaleDateString('th-TH'),
-                device: navigator.userAgent
-            });
+    const q = Number(qty) || 1;
 
-            clearBill();
-            return { change };
-        } catch (err) {
-            console.error("Save bill error:", err);
-            // เธ–เนเธฒ Offline เธซเธฃเธทเธญ Error เนเธซเน throw เน€เธเธทเนเธญเนเธซเน UI เนเธเนเธเน€เธ•เธทเธญเธ
-            throw new Error("เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธเธฑเธเธ—เธถเธเธเธดเธฅเนเธ”เน เธเธฃเธธเธ“เธฒเธ•เธฃเธงเธเธชเธญเธเธญเธดเธเน€เธ—เธญเธฃเนเน€เธเนเธ•");
-        }
-    };
+    setCart((prev) => {
+      const idx = prev.findIndex((it) => it.code === product.code);
+      if (idx >= 0) {
+        const next = [...prev];
+        const old = next[idx];
+        const newQty = Number(old.qty || 0) + q;
+        const pricing = calculatePrice(product, newQty);
+        next[idx] = { ...old, ...pricing, qty: newQty };
+        return next;
+      } else {
+        const pricing = calculatePrice(product, q);
+        return [...prev, { ...product, ...pricing, qty: q }];
+      }
+    });
 
-    return (
-        <PosContext.Provider value={{
-            products,
-            productList,
-            loadingProducts,
-            cart,
-            billId,
-            billStep,
-            setBillStep,
-            addItem,
-            removeItem,
-            clearBill,
-            startNewBill: clearBill,
-            cancelBill: () => { if(window.confirm('เธขเธเน€เธฅเธดเธเธเธดเธฅเธเธฑเธเธเธธเธเธฑเธ?')) clearBill(); },
-            finalizeBill,
-            totals
-        }}>
-            {error ? (
-                <MaintenanceMode onRetry={() => window.location.reload()} />
-            ) : (
-                <>
-                    {children}
-                    <LoadingScreen isLoading={loadingProducts} progress={loadingProgress} />
-                </>
-            )}
-        </PosContext.Provider>
+    return true;
+  }
+
+  function removeItem(index) {
+    setCart((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function clearBill() {
+    setCart([]);
+    setBillStep("scanning");
+    generateBillId();
+  }
+
+  const totals = useMemo(() => {
+    return cart.reduce(
+      (acc, item) => ({
+        subtotal: acc.subtotal + (Number(item.unitPrice) || 0) * (Number(item.qty) || 0),
+        totalDiscount: acc.totalDiscount + (Number(item.discount) || 0),
+        netTotal: acc.netTotal + (Number(item.total) || 0),
+      }),
+      { subtotal: 0, totalDiscount: 0, netTotal: 0 }
     );
-};
+  }, [cart]);
+
+  async function finalizeBill(receivedAmount) {
+    if (!cart.length) return null;
+
+    const received = Number(receivedAmount) || 0;
+    const total = totals.netTotal;
+    const change = Math.max(0, received - total);
+    const timestamp = new Date();
+
+    const itemsToSave = cart.map((item) => ({
+      code: item.code,
+      name: item.name,
+      qty: item.qty,
+      price: item.unitPrice,
+      total: item.total,
+      savedAt: timestamp.toISOString(),
+      billNo: billId,
+    }));
+
+    await addDoc(collection(db, "bills"), {
+      billNo: billId,
+      items: itemsToSave,
+      summary: {
+        subtotal: totals.subtotal,
+        discount: totals.totalDiscount,
+        total,
+        received,
+        change,
+      },
+      timestamp: serverTimestamp(),
+      dateStr: timestamp.toLocaleDateString("th-TH"),
+      device: navigator.userAgent,
+    });
+
+    clearBill();
+    return { change };
+  }
+
+  return (
+    <PosContext.Provider
+      value={{
+        products,
+        productList,
+        loadingProducts,
+        cart,
+        billId,
+        billStep,
+        setBillStep,
+        addItem,
+        removeItem,
+        clearBill,
+        startNewBill: clearBill,
+        finalizeBill,
+        totals,
+      }}
+    >
+      {children}
+      {/* ถ้า LoadingScreen ของพี่เป็นแบบง่าย ๆ ก็ยังแสดงได้ ไม่พัง */}
+      {loadingProducts ? <LoadingScreen /> : null}
+      {error ? (
+        <div style={{ padding: 16, color: "crimson" }}>
+          POS Error: {String(error?.message || error)}
+        </div>
+      ) : null}
+    </PosContext.Provider>
+  );
+}
