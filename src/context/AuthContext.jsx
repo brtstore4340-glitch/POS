@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { APP_CONFIG } from '../config/constants';
 
 const AuthContext = createContext();
 
@@ -20,10 +21,10 @@ export const AuthProvider = ({ children }) => {
 
     // Auto-logout Timer
     const logoutTimerRef = useRef(null);
-    const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes
+    const INACTIVITY_LIMIT = APP_CONFIG.INACTIVITY_TIMEOUT_MS;
 
     // Helper: Convert Employee ID to Synthetic Email
-    const getEmailFromId = (employeeId) => `${employeeId}@boots-pos.local`;
+    const getEmailFromId = (employeeId) => `${employeeId}@${APP_CONFIG.SYNTHETIC_EMAIL_DOMAIN}`;
 
     const login = async (employeeId, password) => {
         const email = getEmailFromId(employeeId);

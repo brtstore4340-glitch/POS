@@ -1,17 +1,28 @@
 // src/services/securityService.js
-import crypto from 'crypto';
+// Browser-compatible security service using Web Crypto API
 import { db, collection, getDocs } from './firebase';
 
 /**
- * Hash security answer using SHA1
+ * Hash security answer using SHA-1 (Web Crypto API)
  * @param {string} answer - Plain text answer
- * @returns {string} SHA1 hash
+ * @returns {Promise<string>} SHA-1 hash in hexadecimal format
  */
-export const hashAnswer = (answer) => {
-    return crypto
-        .createHash('sha1')
-        .update(answer.toLowerCase().trim())
-        .digest('hex');
+export const hashAnswer = async (answer) => {
+    // Normalize the answer (lowercase and trim)
+    const normalized = answer.toLowerCase().trim();
+
+    // Convert string to Uint8Array
+    const encoder = new TextEncoder();
+    const data = encoder.encode(normalized);
+
+    // Hash using Web Crypto API (SHA-1)
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+
+    // Convert ArrayBuffer to hex string
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return hashHex;
 };
 
 /**
@@ -22,14 +33,14 @@ export const fetchSecurityQuestions = async () => {
     try {
         const snapshot = await getDocs(collection(db, 'securityQuestions'));
         const questions = [];
-        
+
         snapshot.forEach(doc => {
             questions.push({
                 id: doc.id,
                 ...doc.data()
             });
         });
-        
+
         // Sort by order
         questions.sort((a, b) => (a.order || 0) - (b.order || 0));
         return questions;
@@ -43,9 +54,9 @@ export const fetchSecurityQuestions = async () => {
  * Verify security answer
  * @param {string} userAnswer - User's answer
  * @param {string} storedHash - Stored hash from Firestore
- * @returns {boolean} True if answer is correct
+ * @returns {Promise<boolean>} True if answer is correct
  */
-export const verifySecurityAnswer = (userAnswer, storedHash) => {
-    const answerHash = hashAnswer(userAnswer);
+export const verifySecurityAnswer = async (userAnswer, storedHash) => {
+    const answerHash = await hashAnswer(userAnswer);
     return answerHash === storedHash;
 };
