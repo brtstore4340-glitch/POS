@@ -13,7 +13,6 @@ const PosTerminal = () => {
         cancelBill,
         billStep,
         setBillStep,
-        billStep
     } = usePos();
 
     // Local UI State
