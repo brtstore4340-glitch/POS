@@ -1,35 +1,30 @@
 // Setup Script: Create First Admin User
 // Run this ONCE to bootstrap the system with the primary admin account
-// Usage: node setup-admin.js
+// Usage: npm run setup-admin
 
 import admin from 'firebase-admin';
-import { createRequire } from 'node:module';
+import dotenv from 'dotenv';
 
-const require = createRequire(import.meta.url);
+// Load environment variables
+dotenv.config({ path: '.env.local' });
 
-// Initialize Admin SDK with your service account
-// You need to download the service account key from Firebase Console
-// Go to: Project Settings > Service Accounts > Generate New Private Key
-// Save the JSON file and update the path below
-
+// Initialize Admin SDK with environment variables
 try {
-    const serviceAccount = require('./firebase-adminsdk-key.json');
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON.replace(/\\"/g, '"'));
 
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });
 } catch (error) {
-    console.error('❌ Error: Cannot find firebase-adminsdk-key.json');
-    console.error('Please download the service account key from Firebase Console:');
-    console.error('  1. Go to Firebase Console > Project Settings > Service Accounts');
-    console.error('  2. Click "Generate New Private Key"');
-    console.error('  3. Save the file as "firebase-adminsdk-key.json" in this directory');
+    console.error('❌ Error: Cannot initialize Firebase Admin SDK');
+    console.error('Please check your .env.local file and ensure FIREBASE_SERVICE_ACCOUNT_JSON is set correctly');
+    console.error('Error details:', error.message);
     process.exit(1);
 }
 
 const ADMIN_EMPLOYEE_ID = '6705067';
 const ADMIN_EMAIL = `${ADMIN_EMPLOYEE_ID}@boots-pos.local`;
-const ADMIN_PASSWORD = ADMIN_EMPLOYEE_ID; // Initial password (will be forced to change)
+const ADMIN_PASSWORD = ADMIN_EMPLOYEE_ID;
 const RESET_PASSWORD_IF_EXISTS = true;
 
 async function createAdminUser() {
@@ -51,13 +46,17 @@ async function createAdminUser() {
                 console.log('⚠️  User already exists, fetching...');
                 userRecord = await admin.auth().getUserByEmail(ADMIN_EMAIL);
                 console.log(`✅ Found existing user: ${userRecord.uid}`);
+
                 if (RESET_PASSWORD_IF_EXISTS) {
-                    console.log('🔁 Resetting password for existing user...');
-                    await admin.auth().updateUser(userRecord.uid, {
+                    console.log('🔁 Deleting and recreating user to reset password...');
+                    await admin.auth().deleteUser(userRecord.uid);
+                    userRecord = await admin.auth().createUser({
+                        uid: userRecord.uid,
+                        email: ADMIN_EMAIL,
                         password: ADMIN_PASSWORD,
-                        displayName: 'Primary Admin',
+                        displayName: 'Primary Admin'
                     });
-                    console.log('✅ Password reset for existing user');
+                    console.log('✅ User recreated with new password');
                 }
             } else {
                 throw error;
