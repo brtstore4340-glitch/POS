@@ -12,13 +12,20 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// ตรวจสอบว่า Key ถูกโหลดมาจริงหรือไม่ (ใช้ Debug เฉพาะตอน dev)
-if (!firebaseConfig.apiKey) {
-    console.error("Firebase Configuration is missing! Check your .env file or GitHub Secrets.");
+// Validate Firebase configuration
+const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId'];
+const missingKeys = requiredConfigKeys.filter(key => !firebaseConfig[key]);
+
+if (missingKeys.length > 0) {
+    const errorMsg = `Firebase Configuration Error: Missing required keys: ${missingKeys.join(', ')}. Please check your .env.local file or GitHub Secrets.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
 }
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
 export { app, db, auth, collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, getDocs, orderBy, query, where, addDoc };
+

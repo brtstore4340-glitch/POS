@@ -1,10 +1,8 @@
 // src/services/dataService.js
 import * as XLSX from 'xlsx';
+import { APP_CONFIG } from '../config/constants';
 
-export const PRODUCT_STORAGE_KEYS = {
-    productMaster: 'pos_product_master_v1',
-    itemExport: 'pos_item_export_v1'
-};
+export const PRODUCT_STORAGE_KEYS = APP_CONFIG.PRODUCT_STORAGE_KEYS;
 
 // ฟังก์ชันอ่านไฟล์ รองรับทั้ง .xlsx, .xls และ .csv
 const readFile = (file) => {
@@ -16,11 +14,11 @@ const readFile = (file) => {
                 const data = new Uint8Array(e.target.result);
                 // type: 'array' รองรับไฟล์ได้ครอบคลุมที่สุดทั้ง Excel รุ่นเก่า/ใหม่ และ CSV
                 const workbook = XLSX.read(data, { type: 'array' });
-                
+
                 // อ่าน Sheet แรกเสมอ
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
-                
+
                 // แปลงเป็น JSON โดยใช้ header: 'A' เพื่ออ้างอิง Column เป็นตัวอักษร A, B, C...
                 // defval: '' ป้องกันค่า undefined ในช่องว่าง
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 'A', defval: '' });
@@ -32,7 +30,7 @@ const readFile = (file) => {
         };
 
         reader.onerror = (err) => reject(new Error("การอ่านไฟล์ล้มเหลว"));
-        
+
         // ใช้ readAsArrayBuffer เพื่อรองรับทุก Format (.xlsx, .xls, .csv)
         reader.readAsArrayBuffer(file);
     });
@@ -40,7 +38,7 @@ const readFile = (file) => {
 
 export const importItemExport = async (file, onProgress) => {
     if (onProgress) onProgress(10);
-    
+
     try {
         // ตรวจสอบนามสกุลไฟล์เบื้องต้น (Optional validation)
         const fileName = file.name.toLowerCase();
@@ -71,7 +69,7 @@ export const importItemExport = async (file, onProgress) => {
 
         // บันทึกลง LocalStorage
         localStorage.setItem(PRODUCT_STORAGE_KEYS.itemExport, JSON.stringify(processedData));
-        
+
         if (onProgress) onProgress(100);
         return processedData;
     } catch (error) {
