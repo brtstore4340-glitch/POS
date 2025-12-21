@@ -1,7 +1,8 @@
-import { describe, it, expect,  vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '../context/AuthContext';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth } from '../services/firebase';
 
 // Mock Firebase modules
 vi.mock('firebase/auth', () => ({
@@ -21,10 +22,11 @@ vi.mock('firebase/firestore', () => ({
     data: () => ({ role: 'admin', mustChangePassword: false }),
   })),
   doc: vi.fn(),
+  updateDoc: vi.fn(),
 }));
 
 vi.mock('../services/firebase', () => ({
-  auth: {},
+  auth: { uid: 'mock-auth-obj' },
   db: {},
 }));
 
@@ -56,7 +58,7 @@ describe('AuthContext', () => {
 
     await result.current.login('6705067', 'password');
 
-    expect(signInWithEmailAndPassword).toHaveBeenCalled With('6705067@boots-pos.local', 'password');
+    expect(signInWithEmailAndPassword).toHaveBeenCalledWith(auth, '6705067@boots-pos.local', 'password');
   });
 
   it('should handle logout', async () => {
@@ -67,6 +69,6 @@ describe('AuthContext', () => {
 
     await result.current.logout();
 
-    expect(signOut).toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalledWith(auth);
   });
 });

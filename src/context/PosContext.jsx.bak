@@ -1,9 +1,9 @@
-﻿import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../services/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { calculatePrice } from '../features/pricing';
 import { PRODUCT_STORAGE_KEYS } from '../services/dataService';
-import LoadingScreen from '../components/ui/LoadingScreen';
+import LoadingScreen from '../components/LoadingScreen';
 import MaintenanceMode from '../components/MaintenanceMode';
 
 const PosContext = createContext();
@@ -23,12 +23,12 @@ export const PosProvider = ({ children }) => {
     const [cart, setCart] = useState([]); 
     const [billStep, setBillStep] = useState('scanning'); 
     
-    // เนเธเน Ref เน€เธเธทเนเธญเธเนเธญเธเธเธฑเธเธเธฒเธฃ Re-render เนเธฅเธฐเน€เธเนเธ Sequence
+    // ใช้ Ref เพื่อป้องกันการ Re-render และเก็บ Sequence
     const billSequenceRef = useRef({ stamp: '', seq: 0 });
 
     // --- Initialization ---
     useEffect(() => {
-        // 1. Load Bill Sequence from LocalStorage (เน€เธเธทเนเธญเนเธกเนเนเธซเนเน€เธฅเธเธเธดเธฅเธเนเธณเน€เธกเธทเนเธญ Refresh)
+        // 1. Load Bill Sequence from LocalStorage (เพื่อไม่ให้เลขบิลซ้ำเมื่อ Refresh)
         const savedSeq = localStorage.getItem(PRODUCT_STORAGE_KEYS.billSeq);
         if (savedSeq) {
             try {
@@ -53,7 +53,7 @@ export const PosProvider = ({ children }) => {
              }, 100);
         }
         
-        generateBillId(); // Gen เธเธฃเธฑเนเธเนเธฃเธ
+        generateBillId(); // Gen ครั้งแรก
 
         // Listen to storage events (Cross-tab or same-tab updates)
         const handleStorageUpdate = () => loadFromStorage();
@@ -79,7 +79,7 @@ export const PosProvider = ({ children }) => {
                 ...item,
                 code,
                 barcode,
-                name: item.name || 'เธชเธดเธเธเนเธฒเนเธกเนเธฃเธฐเธเธธเธเธทเนเธญ',
+                name: item.name || 'สินค้าไม่ระบุชื่อ',
                 price: parseFloat(item.price) || 0,
                 dealPrice: parseFloat(item.dealPrice) || 0,
                 method: parseInt(item.method) || 0,
@@ -182,7 +182,7 @@ export const PosProvider = ({ children }) => {
         generateBillId(); 
     };
 
-    // เนเธเน useMemo เธเธณเธเธงเธ“ Totals เน€เธเธทเนเธญ performance เธ—เธตเนเธ”เธตเธเธถเนเธ
+    // ใช้ useMemo คำนวณ Totals เพื่อ performance ที่ดีขึ้น
     const totals = useMemo(() => {
         return cart.reduce((acc, item) => ({
             subtotal: acc.subtotal + (item.unitPrice * item.qty),
@@ -229,8 +229,8 @@ export const PosProvider = ({ children }) => {
             return { change };
         } catch (err) {
             console.error("Save bill error:", err);
-            // เธ–เนเธฒ Offline เธซเธฃเธทเธญ Error เนเธซเน throw เน€เธเธทเนเธญเนเธซเน UI เนเธเนเธเน€เธ•เธทเธญเธ
-            throw new Error("เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธเธฑเธเธ—เธถเธเธเธดเธฅเนเธ”เน เธเธฃเธธเธ“เธฒเธ•เธฃเธงเธเธชเธญเธเธญเธดเธเน€เธ—เธญเธฃเนเน€เธเนเธ•");
+            // ถ้า Offline หรือ Error ให้ throw เพื่อให้ UI แจ้งเตือน
+            throw new Error("ไม่สามารถบันทึกบิลได้ กรุณาตรวจสอบอินเทอร์เน็ต");
         }
     };
 
@@ -247,7 +247,7 @@ export const PosProvider = ({ children }) => {
             removeItem,
             clearBill,
             startNewBill: clearBill,
-            cancelBill: () => { if(window.confirm('เธขเธเน€เธฅเธดเธเธเธดเธฅเธเธฑเธเธเธธเธเธฑเธ?')) clearBill(); },
+            cancelBill: () => { if(window.confirm('ยกเลิกบิลปัจจุบัน?')) clearBill(); },
             finalizeBill,
             totals
         }}>

@@ -1,11 +1,12 @@
 // src/services/securityService.js
 // Browser-compatible security service using Web Crypto API
-import { db, collection, getDocs } from './firebase';
+import { db } from './firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 /**
- * Hash security answer using SHA-1 (Web Crypto API)
+ * Hash security answer using SHA-256 (Web Crypto API)
  * @param {string} answer - Plain text answer
- * @returns {Promise<string>} SHA-1 hash in hexadecimal format
+ * @returns {Promise<string>} SHA-256 hash in hexadecimal format
  */
 export const hashAnswer = async (answer) => {
     // Normalize the answer (lowercase and trim)
@@ -15,8 +16,8 @@ export const hashAnswer = async (answer) => {
     const encoder = new TextEncoder();
     const data = encoder.encode(normalized);
 
-    // Hash using Web Crypto API (SHA-1)
-    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    // Hash using Web Crypto API (SHA-256)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 
     // Convert ArrayBuffer to hex string
     const hashArray = Array.from(new Uint8Array(hashBuffer));

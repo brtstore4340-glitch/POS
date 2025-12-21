@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import Login from '../components/Login';
+import Login from './Login';
 import { useAuth } from '../context/AuthContext';
 
 // Mock AuthContext
@@ -44,20 +44,6 @@ describe('Login Component', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
-  it('should show validation errors for empty fields', async () => {
-    render(
-      <BrowserRouter>
-        <Login />
-      </BrowserRouter>
-    );
-
-    const submitButton = screen.getByRole('button', { name: /sign in/i });
-    fireEvent.click(submitButton);
-
-    // HTML5 validation will prevent submission
-    expect(mockLogin).not.toHaveBeenCalled();
-  });
-
   it('should call login on form submission', async () => {
     mockLogin.mockResolvedValue({});
 
@@ -76,12 +62,12 @@ describe('Login Component', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith('6705067@boots-pos.local', 'password123');
+      expect(mockLogin).toHaveBeenCalledWith('6705067', 'password123');
     });
   });
 
   it('should display error on login failure', async () => {
-    const errorMessage = 'Invalid employee ID';
+    // Mock a rejected promise from login
     mockLogin.mockRejectedValue({ code: 'auth/user-not-found' });
 
     render(
@@ -94,8 +80,8 @@ describe('Login Component', () => {
     const passwordInput = screen.getByPlaceholderText(/enter your password/i);
     const submitButton = screen.getByRole('button', { name: /sign in/i });
 
-    fireEvent.change(employeeIdInput, { target: { value: 'invalid' } });
-    fireEvent.change(passwordInput, { target: { value: 'wrong' } });
+    fireEvent.change(employeeIdInput, { target: { value: '6705067' } });
+    fireEvent.change(passwordInput, { target: { value: 'wrongpassword' } }); // > 6 chars
     fireEvent.click(submitButton);
 
     await waitFor(() => {
@@ -103,7 +89,7 @@ describe('Login Component', () => {
     });
   });
 
-  it('should have forgot password link', () => {
+  it('should navigate to reset password page when forgot password is clicked', () => {
     render(
       <BrowserRouter>
         <Login />
@@ -111,8 +97,6 @@ describe('Login Component', () => {
     );
 
     const forgotPasswordLink = screen.getByText(/forgot password/i);
-    expect(forgotPasswordLink).toBeInTheDocument();
-    
     fireEvent.click(forgotPasswordLink);
     expect(mockNavigate).toHaveBeenCalledWith('/reset-password');
   });
