@@ -52,3 +52,7 @@ node_modules/
 # OS generated files
 .DS_Store
 Thumbs.db
+src/services/secrets/
+**/serviceAccount.json
+.env
+.env.*
