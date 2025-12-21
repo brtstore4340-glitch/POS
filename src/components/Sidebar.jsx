@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { LayoutDashboard, BarChart3, Settings, LogOut } from 'lucide-react';
 
 const Sidebar = ({ currentView, onViewChange }) => {

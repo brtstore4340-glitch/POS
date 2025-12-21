@@ -1,37 +1,36 @@
 // src/features/pricing.js
-export const calculatePrice = (product, qty = 1, method = 0) => {
-    // แปลงค่าให้เป็นตัวเลขที่แน่นอน
-    const regPrice = Number(product.price) || 0;     // จาก Column G (Reg. Price)
-    const dealPrice = Number(product.dealPrice) || 0; // จาก Column I (Deal Price)
-    const safeQty = Number(qty) || 1;
-    const currentMethod = Number(method);
 
-    let unitPrice = regPrice;
-    let isPromo = false;
+/**
+ * คำนวณราคาสินค้าตามจำนวนและเงื่อนไข (Method)
+ * @param {Object} product - ข้อมูลสินค้า
+ * @param {number} qty - จำนวนสินค้า
+ * @param {number} method - วิธีคิดราคา (0=ปกติ, 1=ราคาโปรโมชั่น)
+ */
+export const calculatePrice = (product, qty, method = 0) => {
+    const quantity = Number(qty) || 0;
+    let unitPrice = Number(product.price) || 0;
+    let total = 0;
+    let discount = 0;
 
-    // Logic การเลือกราคาตาม Method
-    // Method 1 ใช้ราคา Deal Price
-    // Method 0, 8, 9, 17, 18, 19 ใช้ราคา Reg Price
-    if (currentMethod === 1) {
-        unitPrice = dealPrice;
-        isPromo = true;
-    } else {
-        unitPrice = regPrice;
-        isPromo = false;
+    // Logic การคิดราคา
+    // Method 0: ราคาปกติ
+    // Method 1: ใช้ราคา Deal Price (ถ้ามี)
+    
+    if (method === 1 && product.dealPrice > 0) {
+        unitPrice = Number(product.dealPrice);
     }
 
-    // คำนวณส่วนลด (Discount = ราคาปกติ - ราคาที่ขายจริง)
-    // ถ้าขายราคาปกติ ส่วนลดจะเป็น 0
-    // ถ้าขายราคา Deal ส่วนลดจะเป็น Reg - Deal
-    const discountPerUnit = Math.max(0, regPrice - unitPrice);
-    const totalDiscount = discountPerUnit * safeQty;
-    const total = unitPrice * safeQty;
+    // คำนวณราคารวม (Base Calculation)
+    const subtotal = unitPrice * quantity;
+    
+    // ตรวจสอบส่วนลด (ถ้ามี Logic ส่วนลดเพิ่มเติมใส่ตรงนี้)
+    // ตัวอย่าง: ถ้า method เป็นอะไรสักอย่างที่ลดราคา
+    
+    total = subtotal - discount;
 
     return {
-        unitPrice,
-        total,
-        discount: totalDiscount,
-        isPromo,
-        method: currentMethod
+        unitPrice, // ราคาต่อหน่วยที่ใช้คำนวณจริง
+        total,     // ราคารวมสุทธิ
+        discount   // ส่วนลดรวม
     };
 };
