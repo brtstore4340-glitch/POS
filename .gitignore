@@ -33,3 +33,22 @@ dist-ssr
 firebase-debug.log
 firebase-adminsdk-key.json
 *-adminsdk-*.json
+
+
+# Environment variables
+.env.local
+.env*.local
+
+# Secrets
+secrets/
+*.json
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db

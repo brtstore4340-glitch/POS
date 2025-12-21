@@ -1,152 +1,98 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
+// src/context/AuthContext.jsx
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import {
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+    updatePassword,
+    reauthenticateWithCredential,
+    EmailAuthProvider
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { APP_CONFIG } from '../config/constants';
 
 const AuthContext = createContext();
 
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-};
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [mustChangePassword, setMustChangePassword] = useState(false);
-  
-  // Inactivity tracking
-  const inactivityTimerRef = useRef(null);
-  const lastActivityRef = useRef(Date.now());
+    const [user, setUser] = useState(null);
+    const [role, setRole] = useState(null); // 'admin' | 'user'
+    const [loading, setLoading] = useState(true);
+    const [mustChangePassword, setMustChangePassword] = useState(false);
 
-  // Reset inactivity timer
-  const resetInactivityTimer = () => {
-    lastActivityRef.current = Date.now();
-    
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-    }
-    
-    if (user) {
-      inactivityTimerRef.current = setTimeout(() => {
-        console.log('Auto-logout due to inactivity');
-        logout();
-      }, APP_CONFIG.INACTIVITY_TIMEOUT_MS);
-    }
-  };
+    // Auto-logout Timer
+    const logoutTimerRef = useRef(null);
+    const INACTIVITY_LIMIT = APP_CONFIG.INACTIVITY_TIMEOUT_MS;
 
-  // Setup activity listeners
-  useEffect(() => {
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    
-    events.forEach(event => {
-      document.addEventListener(event, resetInactivityTimer);
-    });
+    // Helper: Convert Employee ID to Synthetic Email
+    const getEmailFromId = (employeeId) => `${employeeId}@${APP_CONFIG.SYNTHETIC_EMAIL_DOMAIN}`;
 
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, resetInactivityTimer);
-      });
-      
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-      }
-    };
-  }, [user]);
-
-  // Monitor auth state changes
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      try {
-        if (currentUser) {
-          // Fetch user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setRole(userData.role || 'user');
-            setMustChangePassword(userData.mustChangePassword || false);
-          } else {
-            // User exists in Auth but not in Firestore - set defaults
-            setRole('user');
-            setMustChangePassword(false);
-          }
-          
-          setUser(currentUser);
-          resetInactivityTimer();
-        } else {
-          setUser(null);
-          setRole(null);
-          setMustChangePassword(false);
+    const login = async (employeeId, password) => {
+        const email = getEmailFromId(employeeId);
+        try {
+            const result = await signInWithEmailAndPassword(auth, email, password);
+            return result;
+        } catch (error) {
+            throw error;
         }
-      } catch (error) {
-        console.error("Auth Error:", error);
-        // If error fetching user data, still set the user but with default role
-        setUser(currentUser);
-        setRole('user');
+    };
+
+    const logout = async () => {
+        try {
+            await signOut(auth);
+            setUser(null);
+            setRole(null);
+            if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
+
+    // เพิ่มฟังก์ชัน Reauthenticate (จำเป็นสำหรับการเปลี่ยนรหัสผ่าน)
+    const reauthenticate = async (currentPassword) => {
+        if (!user) throw new Error("No user logged in");
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        return await reauthenticateWithCredential(user, credential);
+    };
+
+    const changeFirstTimePassword = async (newPassword) => {
+        if (!auth.currentUser) throw new Error("No user logged in");
+
+        await updatePassword(auth.currentUser, newPassword);
+
+        // Update Firestore to indicate password has been changed
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await setDoc(userRef, { mustChangePassword: false }, { merge: true });
+
         setMustChangePassword(false);
-      } finally {
-        // Critical: Always stop loading
-        setLoading(false);
-      }
-    });
+    };
 
-    return () => unsubscribe();
-  }, []);
+    // Auto-logout Logic
+    const resetTimer = () => {
+        if (!user) return;
+        if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
 
-  // Login function
-  const login = async (employeeId, password) => {
-    try {
-      const email = `${employeeId}@${APP_CONFIG.SYNTHETIC_EMAIL_DOMAIN}`;
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Fetch user data to check password change requirement
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setMustChangePassword(userData.mustChangePassword || false);
-      }
-      
-      return userCredential.user;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
-  };
+        logoutTimerRef.current = setTimeout(() => {
+            console.log("Auto-logout due to inactivity");
+            logout();
+        }, INACTIVITY_LIMIT);
+    };
 
-  // Logout function
-  const logout = async () => {
-    try {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-      }
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout error:', error);
-      throw error;
-    }
-  };
+    useEffect(() => {
+        // Listen for activity
+        const events = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+        const handleActivity = () => resetTimer();
 
-  const value = {
-    user,
-    role,
-    loading,
-    mustChangePassword,
-    login,
-    logout,
-    currentUser: user, // Alias for compatibility
-  };
+        if (user) {
+            events.forEach(event => window.addEventListener(event, handleActivity));
+            resetTimer(); // Start timer on login
+        }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
-};
+        return () => {
+            events.forEach(event => window.removeEventListener(event, handleActivity));
+            if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+        };
+    }, [user]);
+}
