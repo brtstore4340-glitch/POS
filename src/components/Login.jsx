@@ -2,10 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card } from '../components/ui/Card';
-import { Alert } from '../components/ui/Alert';
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -55,10 +51,8 @@ export default function Login() {
     setErrors({});
     
     try {
-      const email = `${formData.employeeId}@boots-pos.local`;
-      await login(email, formData.password);
+      await login(formData.employeeId, formData.password);
       
-      // Check if password change is required
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
       
@@ -90,7 +84,6 @@ export default function Login() {
       [name]: value
     }));
     
-    // Clear error when user types
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -101,77 +94,74 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your employee credentials
-          </p>
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 space-y-8">
+        <div className="text-center">
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Sign in to Boots POS</h2>
+          <p className="mt-2 text-sm text-gray-600">Enter your employee credentials</p>
         </div>
         
         {message && (
-          <Alert variant="error" message={message} />
+          <div className="bg-blue-50 border border-blue-200 text-blue-600 px-4 py-3 rounded-lg text-sm" role="alert">
+            {message}
+          </div>
         )}
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700">
-                Employee ID
-              </label>
-              <Input
+              <label htmlFor="employeeId" className="block text-sm font-medium text-gray-700">Employee ID</label>
+              <input
                 id="employeeId"
                 name="employeeId"
                 type="text"
+                autoComplete="username"
+                required
+                className={`mt-1 block w-full px-3 py-2 border ${errors.employeeId ? 'border-red-300 text-red-900' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                placeholder="Enter your employee ID"
                 value={formData.employeeId}
                 onChange={handleChange}
-                error={errors.employeeId}
-                disabled={loading}
-                placeholder="Enter your employee ID"
               />
+              {errors.employeeId && <p className="mt-2 text-sm text-red-600">{errors.employeeId}</p>}
             </div>
             
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <Input
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+              <input
                 id="password"
                 name="password"
                 type="password"
+                autoComplete="current-password"
+                required
+                className={`mt-1 block w-full px-3 py-2 border ${errors.password ? 'border-red-300 text-red-900' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                placeholder="Enter your password"
                 value={formData.password}
                 onChange={handleChange}
-                error={errors.password}
-                disabled={loading}
-                placeholder="Enter your password"
               />
+              {errors.password && <p className="mt-2 text-sm text-red-600">{errors.password}</p>}
             </div>
           </div>
 
           <div>
-            <Button
+            <button
               type="submit"
-              loading={loading}
-              className="w-full"
               disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              Sign in
-            </Button>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
           </div>
           
           <div className="text-center">
             <button
               type="button"
               onClick={() => navigate('/reset-password')}
-              className="text-sm text-blue-600 hover:text-blue-500"
+              className="text-sm text-blue-600 hover:text-blue-500 font-medium"
             >
               Forgot Password?
             </button>
           </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

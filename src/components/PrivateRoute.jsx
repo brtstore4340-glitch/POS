@@ -2,7 +2,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // แก้เป็น ../context (ไม่มี s)
-import LoadingScreen from './LoadingScreen'; // เปลี่ยนจาก LoadingSpinner เป็น LoadingScreen
+import LoadingScreen from './ui/LoadingScreen'; // เปลี่ยนจาก LoadingSpinner เป็น LoadingScreen
 
 export default function PrivateRoute({ children }) {
   const { user, loading, mustChangePassword } = useAuth(); // ใช้ user แทน currentUser ให้ตรงกับ AuthContext

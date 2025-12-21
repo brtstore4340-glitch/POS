@@ -6,26 +6,18 @@ import { createUserWithEmailAndPassword } from 'firebase/auth'; // Careful: Clie
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword as createUserSecondary } from "firebase/auth";
 import { doc, setDoc, getDocs, collection, query, orderBy } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db, firebaseConfig } from '../services/firebase';
 import { UserPlus, Save, X, Users, AlertCircle } from 'lucide-react';
 
-// We need the config again to initialize a secondary app
-// In a real prod env, this should be a Cloud Function to avoid exposing logic,
-// but for this specific POS request, we'll use the Secondary App pattern.
-const firebaseConfig = {
-    apiKey: "AIzaSyAJ8IOa8sK640qYEGSqJQpvwjOBfRFxXKA",
-    authDomain: "boots-thailand-pos-project.firebaseapp.com",
-    projectId: "boots-thailand-pos-project",
-    storageBucket: "boots-thailand-pos-project.firebasestorage.app",
-    messagingSenderId: "596081819830",
-    appId: "1:596081819830:web:f4f2bac7790803b8606617",
-};
+
 
 const UserManagement = () => {
     const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
@@ -139,13 +131,14 @@ const UserManagement = () => {
                                 <th className="px-6 py-4 font-semibold text-slate-700">Store ID</th>
                                 <th className="px-6 py-4 font-semibold text-slate-700">Role</th>
                                 <th className="px-6 py-4 font-semibold text-slate-700">Status</th>
+                                <th className="px-6 py-4 font-semibold text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
-                                <tr><td colSpan="5" className="px-6 py-8 text-center text-slate-500">Loading users...</td></tr>
+                                <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">Loading users...</td></tr>
                             ) : users.length === 0 ? (
-                                <tr><td colSpan="5" className="px-6 py-8 text-center text-slate-500">No users found.</td></tr>
+                                <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">No users found.</td></tr>
                             ) : (
                                 users.map(u => (
                                     <tr key={u.id} className="hover:bg-slate-50 transition-colors">
@@ -166,6 +159,17 @@ const UserManagement = () => {
                                             ) : (
                                                 <span className="text-green-600 text-xs">Active</span>
                                             )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <button 
+                                                onClick={() => {
+                                                    setSelectedUser(u);
+                                                    setShowResetModal(true);
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                            >
+                                                Reset Password
+                                            </button>
                                         </td>
                                     </tr>
                                 ))
@@ -284,6 +288,49 @@ const UserManagement = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Reset Password Modal */}
+            {showResetModal && selectedUser && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                <AlertCircle size={20} className="text-orange-600" />
+                                Reset User Password
+                            </h3>
+                            <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-600">
+                                Due to security constraints, you cannot directly reset another user's password.
+                                The recommended procedure is to <strong>delete and re-create the user</strong>.
+                            </p>
+                            <div className="p-4 bg-slate-50 rounded-lg text-sm">
+                                <p className="font-medium text-slate-800">
+                                    User: <span className="font-mono">{selectedUser.firstName} {selectedUser.lastName} ({selectedUser.employeeId})</span>
+                                </p>
+                                <p className="mt-2">
+                                    This will permanently delete the user's account and associated data. When you re-create the account with the same Employee ID, their password will be set to their Employee ID, and they will be required to change it upon next login.
+                                </p>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                For a more seamless experience, implementing a backend service (e.g., Firebase Cloud Functions) is required to handle password resets securely.
+                            </p>
+                        </div>
+                         <div className="pt-4 px-6 pb-4 border-t border-slate-100 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowResetModal(false)}
+                                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                            >
+                                I Understand
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

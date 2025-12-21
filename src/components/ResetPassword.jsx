@@ -7,12 +7,10 @@ import { fetchSecurityQuestions, verifySecurityAnswer } from '../services/securi
 import { APP_CONFIG } from '../config/constants';
 
 export default function ResetPassword() {
-  const [step, setStep] = useState(1); // 1: Enter ID, 2: Answer Question, 3: New Password
+  const [step, setStep] = useState(1); // 1: Enter ID, 2: Answer Question
   const [employeeId, setEmployeeId] = useState('');
   const [securityQuestion, setSecurityQuestion] = useState('');
   const [securityAnswer, setSecurityAnswer] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -83,10 +81,21 @@ export default function ResetPassword() {
         return;
       }
 
-      setStep(3);
+      // Answer is correct, now flag the account for password reset
+      await updateDoc(doc(db, 'users', userId), {
+        mustChangePassword: true,
+        passwordResetAt: new Date().toISOString()
+      });
+      
+      setSuccess('Verification successful. Please contact an administrator to complete the password reset.');
+      
+      setTimeout(() => {
+        navigate('/login');
+      }, 4000);
+
     } catch (err) {
       console.error('Error:', err);
-      setError('Failed to verify answer. Please try again.');
+      setError('Failed to process your request. Please try again or contact an administrator.');
     } finally {
       setLoading(false);
     }
@@ -94,38 +103,7 @@ export default function ResetPassword() {
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
-    setError('');
-
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < APP_CONFIG.MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${APP_CONFIG.MIN_PASSWORD_LENGTH} characters`);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await updateDoc(doc(db, 'users', userId), {
-        mustChangePassword: true,
-        passwordResetAt: new Date().toISOString()
-      });
-      
-      setSuccess('Password reset initiated. Please contact administrator to complete the reset, then login with your Employee ID.');
-      
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Failed to reset password. Please try again or contact administrator.');
-    } finally {
-      setLoading(false);
-    }
+    // This function is no longer used, logic is merged into handleSecurityAnswerSubmit
   };
 
   return (
@@ -136,7 +114,7 @@ export default function ResetPassword() {
             Reset Password
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Step {step} of 3
+            Step {step} of 2
           </p>
         </div>
 
@@ -238,57 +216,6 @@ export default function ResetPassword() {
                 className="text-sm text-blue-600 hover:text-blue-500"
               >
                 Back
-              </button>
-            </div>
-          </form>
-        )}
-
-        {step === 3 && (
-          <form onSubmit={handlePasswordReset} className="mt-8 space-y-6">
-            <div>
-              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
-                New Password
-              </label>
-              <input
-                id="newPassword"
-                name="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                disabled={loading}
-                placeholder="Enter new password"
-                required
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Minimum {APP_CONFIG.MIN_PASSWORD_LENGTH} characters
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={loading}
-                placeholder="Confirm new password"
-                required
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
-              >
-                {loading ? 'Resetting...' : 'Reset Password'}
               </button>
             </div>
           </form>
