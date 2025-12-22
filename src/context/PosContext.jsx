@@ -1,5 +1,5 @@
 ﻿import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { db } from "../service/firebase.js";
+import { db } from "../services/firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import LoadingScreen from "../components/ui/LoadingScreen.jsx";
 
@@ -259,3 +259,4 @@ export function PosProvider({ children }) {
     </PosContext.Provider>
   );
 }
+

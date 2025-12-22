@@ -1,10 +1,22 @@
-// Firebase configuration and initialization
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import {
+  getFirestore,
+  serverTimestamp,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  writeBatch,
+} from "firebase/firestore";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
-export const firebaseConfig = {
+/**
+ * IMPORTANT:
+ * - Firebase config ไม่ใช่ secret แต่ต้องล็อก Firestore Rules ให้ดี
+ * - ใช้ .env ของ Vite (ขึ้นต้นด้วย VITE_)
+ */
+
+const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -14,10 +26,17 @@ export const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-
-export const auth = getAuth(app);
+export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+export const auth = getAuth(app);
 
-export default app;
+export const fb = {
+  serverTimestamp,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  writeBatch,
+  signInAnonymously,
+  onAuthStateChanged,
+};

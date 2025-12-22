@@ -5,6 +5,9 @@
  * Application configuration settings
  */
 export const APP_CONFIG = {
+  SYNTHETIC_EMAIL_DOMAIN: "boots.gmail.com",
+  // ...
+
     // Authentication & Security
     INACTIVITY_TIMEOUT_MS: 20 * 60 * 1000, // 20 minutes
     SESSION_DURATION_MS: 8 * 60 * 60 * 1000, // 8 hours maximum session
