@@ -1,32 +1,47 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+exports.resetEmployeePassword = functions
+  .region("asia-southeast1")
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Login required");
+    }
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+    const { employeeId, domain = "boots-pos.local" } = data;
+    if (!employeeId) {
+      throw new functions.https.HttpsError("invalid-argument", "employeeId required");
+    }
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+    const email = `${employeeId}@${domain}`;
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+    // 1) หา user ใน Auth ด้วย email
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (err) {
+      throw new functions.https.HttpsError("not-found", "User not found");
+    }
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    // 2) เช็ก role ใน Firestore ว่าเป็น admin จริงไหม
+    const userRef = db.collection("users").doc(userRecord.uid);
+    const snap = await userRef.get();
+    const profile = snap.exists ? snap.data() : null;
+
+    if (!profile || profile.role !== "admin") {
+      throw new functions.https.HttpsError("permission-denied", "Target is not admin");
+    }
+
+    // 3) สุ่มรหัส 6 หลัก แล้วอัปเดต
+    const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await admin.auth().updateUser(userRecord.uid, { password: newPassword });
+
+    // 4) บังคับเปลี่ยนรหัสครั้งแรก
+    await userRef.set(
+      {
+        mustChangePassword: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return { email, password: newPassword };
+  });
