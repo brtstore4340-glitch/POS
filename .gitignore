@@ -56,3 +56,24 @@ src/services/secrets/
 **/serviceAccount.json
 .env
 .env.*
+
+
+# env
+.env
+.env.*
+!.env.example
+
+# Firebase secrets
+**/serviceAccount*.json
+**/secrets/
+*.pem
+*.key
+
+# build
+dist/
+build/
+coverage/
+node_modules/
+
+# firebase local
+.firebase/
