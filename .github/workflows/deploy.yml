@@ -49,3 +49,5 @@ jobs:
 
       - name: Deploy hosting + functions
         run: npx firebase-tools@latest deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --non-interactive --only hosting,functions
+
+        
