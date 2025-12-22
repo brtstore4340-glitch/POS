@@ -11,7 +11,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
  * - Firebase config “ไม่ใช่ secret” แต่ควรล็อก Firestore Rules ให้ดี
  * - ถ้าพี่ไม่อยาก commit config ให้ทำไฟล์ config.local.js แล้ว .gitignore
  */
-// Firebase Configuration (Vite)
+# Firebase Configuration (Vite)
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,

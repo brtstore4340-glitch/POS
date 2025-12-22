@@ -1,37 +1,23 @@
 // Setup Script: Create First Admin User
 // Run this ONCE to bootstrap the system with the primary admin account
-// Usage: node setup-admin.js
+// Usage: npm run setup-admin
 
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
-// Initialize Admin SDK using GOOGLE_APPLICATION_CREDENTIALS
+// Initialize Admin SDK with environment variables
 try {
-    const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    
-    if (!credentialsPath) {
-        throw new Error('GOOGLE_APPLICATION_CREDENTIALS not found in .env.local');
-    }
-    
-    const fullPath = resolve(credentialsPath);
-    if (!existsSync(fullPath)) {
-        throw new Error(`Service account file not found: ${fullPath}`);
-    }
-    
-    // Firebase Admin จะอ่านจาก GOOGLE_APPLICATION_CREDENTIALS โดยอัตโนมัติ
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON.replace(/\\"/g, '"'));
+
     admin.initializeApp({
-        credential: admin.credential.applicationDefault()
+        credential: admin.credential.cert(serviceAccount)
     });
-    
-    console.log('✅ Firebase Admin SDK initialized successfully');
-    console.log(`✅ Using credentials from: ${fullPath}`);
 } catch (error) {
     console.error('❌ Error: Cannot initialize Firebase Admin SDK');
+    console.error('Please check your .env.local file and ensure FIREBASE_SERVICE_ACCOUNT_JSON is set correctly');
     console.error('Error details:', error.message);
     process.exit(1);
 }
